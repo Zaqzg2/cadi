@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The app is Arabic-only by design (no localization requirement was given), so most
+      copy is written directly in the Composables rather than extracted here. Only the
+      truly cross-cutting strings — referenced from more than one place, or needed before
+      Compose is even running (the manifest label) — live in this file.
+    -->
+    <string name="app_name">Inventory Smart AI</string>
+
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_inventory">المخزون</string>
+    <string name="nav_goals">الأهداف والعمولات</string>
+    <string name="nav_counting">الجرد</string>
+    <string name="nav_purchases">المشتريات</string>
+    <string name="nav_sales">المبيعات</string>
+    <string name="nav_reports">التقارير</string>
+    <string name="nav_data_center">مركز البيانات</string>
+    <string name="nav_assistant">المساعد الذكي</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="nav_more">المزيد</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+      This XML theme only paints the launch window before Compose takes over;
+      all real theming (light/dark, color roles, typography, RTL) lives in
+      core/designsystem/theme/Theme.kt.
+    -->
+    <style name="Theme.InventorySmartAI" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background_light</item>
+        <item name="android:statusBarColor">@color/window_background_light</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:ignore="NewApi">shortEdges</item>
+    </style>
+</resources>

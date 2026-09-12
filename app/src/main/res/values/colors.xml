@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Used only for the pre-Compose XML theme (launch window) and the adaptive icon. -->
+    <color name="ic_launcher_background">#0C6B54</color>
+    <color name="window_background_light">#FBFDF9</color>
+    <color name="window_background_dark">#10140F</color>
+</resources>

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Phase 1 has no cloud backend, so there is nothing extra to include/exclude yet. -->
+<full-backup-content>
+</full-backup-content>
