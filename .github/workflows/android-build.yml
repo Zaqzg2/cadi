@@ -21,13 +21,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle 8.7
+      - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.7'
+          gradle-version: '9.3.1'
 
       - name: Regenerate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.7 --distribution-type bin
+        run: gradle wrapper --gradle-version 9.3.1 --distribution-type bin
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
