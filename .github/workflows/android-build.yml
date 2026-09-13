@@ -31,7 +31,7 @@ jobs:
       # using a genuine Gradle install with internet access — the same one-line fix you'd
       # run locally (`gradle wrapper`), just automated here.
       - name: Regenerate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.13 --distribution-type bin
+        run: gradle wrapper --gradle-version 8.14.4 --distribution-type bin
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
