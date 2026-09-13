@@ -4,9 +4,9 @@
 # Deliberately on the AGP 8.x line, not 9.x: AGP 9.0+ ships "built-in Kotlin" and (as of
 # this writing) has open compatibility issues with Hilt. AGP 8.13.2 is mature, proven with
 # Hilt/KSP/Compose, and needs no opt-out flags at all. Requires Gradle >= 8.13.
-agp = "8.13.2"
+agp = "9.1.1"
 kotlin = "2.4.0"
-ksp = "2.3.10"
+ksp = "2.3.9"
 coreKtx = "1.19.0"
 lifecycle = "2.11.0"
 activityCompose = "1.12.3"
