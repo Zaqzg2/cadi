@@ -1,18 +1,18 @@
 [versions]
 # NOTE: these were the current stable versions at the time this project was generated.
 # Android Studio will flag any that have since moved — accept its upgrade suggestions.
-# AGP 9.x ships "built-in Kotlin" and normally forbids the classic kotlin-android plugin
-# below — see android.builtInKotlin=false in gradle.properties, which is what keeps this
-# working. That flag is a documented, supported opt-out through AGP 10.0, not a hack.
-agp = "9.1.1"
+# Deliberately on the AGP 8.x line, not 9.x: AGP 9.0+ ships "built-in Kotlin" and (as of
+# this writing) has open compatibility issues with Hilt. AGP 8.13.2 is mature, proven with
+# Hilt/KSP/Compose, and needs no opt-out flags at all. Requires Gradle >= 8.13.
+agp = "8.13.2"
 kotlin = "2.4.0"
-ksp = "2.4.0-1.0.30"
-coreKtx = "1.16.0"
-lifecycle = "2.10.1"
-activityCompose = "1.10.1"
+ksp = "2.3.10"
+coreKtx = "1.19.0"
+lifecycle = "2.11.0"
+activityCompose = "1.12.3"
 composeBom = "2026.04.01"
-navigationCompose = "2.9.0"
-hilt = "2.57"
+navigationCompose = "2.9.8"
+hilt = "2.59.2"
 hiltNavigationCompose = "1.3.0"
 room = "2.8.4"
 datastore = "1.1.3"
