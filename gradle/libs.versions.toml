@@ -1,9 +1,12 @@
 [versions]
 # NOTE: these were the current stable versions at the time this project was generated.
 # Android Studio will flag any that have since moved — accept its upgrade suggestions.
+# AGP 9.x ships "built-in Kotlin" and normally forbids the classic kotlin-android plugin
+# below — see android.builtInKotlin=false in gradle.properties, which is what keeps this
+# working. That flag is a documented, supported opt-out through AGP 10.0, not a hack.
 agp = "9.1.1"
 kotlin = "2.4.0"
-ksp = "2.3.9"
+ksp = "2.4.0-1.0.30"
 coreKtx = "1.16.0"
 lifecycle = "2.10.1"
 activityCompose = "1.10.1"
