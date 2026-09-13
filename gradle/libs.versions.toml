@@ -7,11 +7,15 @@
 agp = "8.13.2"
 kotlin = "2.4.0"
 ksp = "2.3.10"
-coreKtx = "1.19.0"
-lifecycle = "2.11.0"
-activityCompose = "1.12.3"
+# Rolled back from "latest" on purpose: androidx.core 1.19.0+, lifecycle 2.11.0+, and
+# navigation-compose past a certain point all gate on compileSdk 37 / AGP 9.1+ via AAR
+# metadata (confirmed against real build failures). These versions are the last ones
+# confirmed to work with compileSdk 36 / AGP 8.13.2.
+coreKtx = "1.16.0"
+lifecycle = "2.10.1"
+activityCompose = "1.10.1"
 composeBom = "2026.04.01"
-navigationCompose = "2.9.8"
+navigationCompose = "2.9.0"
 # Hilt 2.59+ made AGP 9 mandatory and dropped AGP 8 support entirely — 2.58 is the last
 # version compatible with the AGP 8.13.2 line used here, and already includes the
 # Kotlin 2.3+ metadata fix needed for our Kotlin 2.4.0.
