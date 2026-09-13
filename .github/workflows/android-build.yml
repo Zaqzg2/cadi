@@ -26,13 +26,6 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      # The sandbox this project was generated in has no network access, so it could not
-      # download the real gradle-wrapper.jar binary. This step regenerates it for real,
-      # using a genuine Gradle install with internet access — the same one-line fix you'd
-      # run locally (`gradle wrapper`), just automated here.
-      - name: Regenerate Gradle Wrapper
-        run: gradle wrapper --gradle-version 9.5 --distribution-type bin
-
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
