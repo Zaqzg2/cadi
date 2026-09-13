@@ -1,5 +1,6 @@
 name: Android CI - Build Debug APK
 
+# Matches the pipeline: push to GitHub -> this workflow -> Build APK -> download & sideload to test.
 on:
   push:
     branches: [ "main", "master" ]
@@ -10,26 +11,32 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
+      - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
+      # The sandbox this project was generated in has no network access, so it could not
+      # download the real gradle-wrapper.jar binary. This step regenerates it for real,
+      # using a genuine Gradle install with internet access — the same one-line fix you'd
+      # run locally (`gradle wrapper`), just automated here.
+      - name: Regenerate Gradle Wrapper
+        run: gradle wrapper --gradle-version 9.5 --distribution-type bin
+
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Upload Debug APK Artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: inventory-smart-ai-debug-apk
