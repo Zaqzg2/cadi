@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
@@ -74,7 +73,6 @@ class GoalsViewModel @Inject constructor(
         }
 
         selectedProductId
-            .distinctUntilChanged()
             .flatMapLatest { productId ->
                 if (productId == null) flowOf(null)
                 else goalRepository.observeGoalForProduct(productId)
