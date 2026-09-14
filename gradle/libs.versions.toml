@@ -12,7 +12,7 @@ ksp = "2.3.10"
 # metadata (confirmed against real build failures). These versions are the last ones
 # confirmed to work with compileSdk 36 / AGP 8.13.2.
 coreKtx = "1.16.0"
-lifecycle = "2.10.1"
+lifecycle = "2.10.0"
 activityCompose = "1.10.1"
 composeBom = "2026.04.01"
 navigationCompose = "2.9.0"
