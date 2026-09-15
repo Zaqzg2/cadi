@@ -5,7 +5,11 @@
 # this writing) has open compatibility issues with Hilt. AGP 8.13.2 is mature, proven with
 # Hilt/KSP/Compose, and needs no opt-out flags at all. Requires Gradle >= 8.13.
 agp = "8.13.2"
-kotlin = "2.4.0"
+# Hilt 2.58's bundled kotlin-metadata-jvm reader caps at metadata format 2.3.0 (confirmed by
+# a real build error: "Provided Metadata instance has version 2.4.0, while maximum supported
+# version is 2.3.0"). AGP 8.13 was also explicitly built/tested against the Kotlin 2.3 line,
+# so this is a better match than 2.4.0, not just a workaround.
+kotlin = "2.3.20"
 ksp = "2.3.10"
 # Rolled back from "latest" on purpose: androidx.core 1.19.0+, lifecycle 2.11.0+, and
 # navigation-compose past a certain point all gate on compileSdk 37 / AGP 9.1+ via AAR
