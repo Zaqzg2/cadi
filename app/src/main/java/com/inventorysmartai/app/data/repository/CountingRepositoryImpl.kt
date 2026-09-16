@@ -1,5 +1,7 @@
 package com.inventorysmartai.app.data.repository
 
+import androidx.room.withTransaction
+import com.inventorysmartai.app.data.local.database.InventorySmartDatabase
 import com.inventorysmartai.app.data.local.database.dao.CountingDao
 import com.inventorysmartai.app.data.local.database.dao.InventoryDao
 import com.inventorysmartai.app.data.local.database.dao.InventoryMovementDao
@@ -20,6 +22,7 @@ import javax.inject.Singleton
 
 @Singleton
 class CountingRepositoryImpl @Inject constructor(
+    private val database: InventorySmartDatabase,
     private val countingDao: CountingDao,
     private val inventoryDao: InventoryDao,
     private val inventoryMovementDao: InventoryMovementDao
@@ -38,9 +41,10 @@ class CountingRepositoryImpl @Inject constructor(
      * Saving a COMPLETED count is real behavior, not bookkeeping: any item whose actual count
      * differs from the system quantity has its branch stock corrected and a
      * COUNT_ADJUSTMENT movement written, exactly like Purchases/Sales already do for their
-     * own stock-affecting actions.
+     * own stock-affecting actions. Runs in one DB transaction so the count record and its stock
+     * corrections can never end up out of sync if the process is interrupted partway through.
      */
-    override suspend fun saveCount(count: InventoryCount): Long {
+    override suspend fun saveCount(count: InventoryCount): Long = database.withTransaction {
         val now = System.currentTimeMillis()
         val countId = countingDao.upsertCount(
             InventoryCountEntity(
@@ -77,6 +81,7 @@ class CountingRepositoryImpl @Inject constructor(
                         productId = item.productId,
                         branchId = count.branchId,
                         quantity = item.actualQuantity,
+                        batchNumber = null,
                         expiryDate = existingStock?.expiryDate,
                         createdAt = existingStock?.createdAt ?: now,
                         updatedAt = now
@@ -96,7 +101,7 @@ class CountingRepositoryImpl @Inject constructor(
                 )
             }
         }
-        return countId
+        countId
     }
 }
 

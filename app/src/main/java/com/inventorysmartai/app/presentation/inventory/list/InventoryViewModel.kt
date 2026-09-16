@@ -77,7 +77,7 @@ class InventoryViewModel @Inject constructor(
             result = result.filter { it.product.name.contains(f.searchQuery, ignoreCase = true) }
         }
         if (f.itemNumberQuery.isNotBlank()) {
-            result = result.filter { it.product.itemNumber.contains(f.itemNumberQuery, ignoreCase = true) }
+            result = result.filter { it.product.itemNumber?.contains(f.itemNumberQuery, ignoreCase = true) == true }
         }
         if (f.barcodeQuery.isNotBlank()) {
             result = result.filter { it.product.barcode?.contains(f.barcodeQuery, ignoreCase = true) == true }

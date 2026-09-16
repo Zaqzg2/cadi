@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class BranchEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,
+    val code: String? = null,
     val address: String? = null,
     val phone: String? = null,
     val isActive: Boolean = true,
@@ -18,6 +19,7 @@ data class BranchEntity(
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0L,
     val name: String,
+    val code: String? = null,
     val isActive: Boolean = true,
     val createdAt: Long,
     val updatedAt: Long

@@ -27,6 +27,9 @@ interface SalesDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertInvoice(invoice: SalesInvoiceEntity): Long
 
+    @Query("SELECT * FROM sales_invoices WHERE id = :id")
+    suspend fun getById(id: Long): SalesInvoiceEntity?
+
     @Query("DELETE FROM sales_invoice_items WHERE salesInvoiceId = :invoiceId")
     suspend fun clearItems(invoiceId: Long)
 

@@ -4,8 +4,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.inventorysmartai.app.core.common.UiState
+import com.inventorysmartai.app.data.repository.InsufficientStockException
 import com.inventorysmartai.app.domain.model.Branch
 import com.inventorysmartai.app.domain.model.Customer
+import com.inventorysmartai.app.domain.model.InvoiceStatus
 import com.inventorysmartai.app.domain.model.Product
 import com.inventorysmartai.app.domain.model.SalesInvoice
 import com.inventorysmartai.app.domain.model.SalesInvoiceItem
@@ -25,6 +27,8 @@ import javax.inject.Inject
 data class SalesItemRow(
     val productId: Long,
     val productName: String,
+    val itemNumberSnapshot: String? = null,
+    val unitSnapshot: String? = null,
     val quantity: String,
     val unitPrice: String,
     val discountPercent: String = "0"
@@ -40,9 +44,11 @@ data class SalesDetailData(
     val products: List<Product>,
     val branchId: Long?,
     val customerId: Long?,
+    val status: InvoiceStatus,
     val invoiceNumber: String,
     val items: List<SalesItemRow>,
-    val isSaved: Boolean = false
+    val isSaved: Boolean = false,
+    val errorMessage: String? = null
 ) {
     val total: Double get() = items.sumOf { it.lineTotal }
 }
@@ -64,9 +70,11 @@ class SalesDetailViewModel @Inject constructor(
     private val products = MutableStateFlow<List<Product>>(emptyList())
     private val branchId = MutableStateFlow<Long?>(null)
     private val customerId = MutableStateFlow<Long?>(null)
+    private val status = MutableStateFlow(InvoiceStatus.DRAFT)
     private val invoiceNumber = MutableStateFlow("")
     private val items = MutableStateFlow<List<SalesItemRow>>(emptyList())
     private val isSaved = MutableStateFlow(false)
+    private val errorMessage = MutableStateFlow<String?>(null)
 
     private val _uiState = MutableStateFlow<UiState<SalesDetailData>>(UiState.Loading)
     val uiState: StateFlow<UiState<SalesDetailData>> = _uiState.asStateFlow()
@@ -90,25 +98,34 @@ class SalesDetailViewModel @Inject constructor(
     private fun applyExisting(invoice: SalesInvoice) {
         branchId.value = invoice.branchId
         customerId.value = invoice.customerId
+        status.value = invoice.status
         invoiceNumber.value = invoice.invoiceNumber
         items.value = invoice.items.map {
-            SalesItemRow(it.productId, it.productName ?: "", it.quantity.toString(), it.unitPrice.toString(), it.discountPercent.toString())
+            SalesItemRow(it.productId, it.productName ?: "", it.itemNumberSnapshot, it.unitSnapshot, it.quantity.toString(), it.unitPrice.toString(), it.discountPercent.toString())
         }
     }
 
     private fun publish() {
         _uiState.value = UiState.Success(
-            SalesDetailData(isNew, branches.value, customers.value, products.value, branchId.value, customerId.value, invoiceNumber.value, items.value, isSaved.value)
+            SalesDetailData(isNew, branches.value, customers.value, products.value, branchId.value, customerId.value, status.value, invoiceNumber.value, items.value, isSaved.value, errorMessage.value)
         )
     }
 
     fun onBranchSelected(id: Long) { branchId.value = id; publish() }
     fun onCustomerSelected(id: Long) { customerId.value = id; publish() }
+    fun onErrorShown() { errorMessage.value = null; publish() }
 
     fun onAddProduct(productId: Long) {
         if (items.value.any { it.productId == productId }) return
         val product = products.value.find { it.id == productId } ?: return
-        items.value = items.value + SalesItemRow(productId, product.name, "1", (product.defaultPrice ?: 0.0).toString())
+        items.value = items.value + SalesItemRow(
+            productId = productId,
+            productName = product.name,
+            itemNumberSnapshot = product.itemNumber,
+            unitSnapshot = product.unitName,
+            quantity = "1",
+            unitPrice = (product.defaultPrice ?: 0.0).toString()
+        )
         publish()
     }
 
@@ -132,29 +149,43 @@ class SalesDetailViewModel @Inject constructor(
         publish()
     }
 
-    fun onSave() {
+    /** [targetStatus] DRAFT just persists the lines with no stock effect at all; CONFIRMED is
+     *  "complete the invoice" — validates stock, decreases inventory and writes a movement, all
+     *  inside one DB transaction (see SalesRepositoryImpl). A failed validation leaves the form
+     *  untouched and surfaces [SalesDetailData.errorMessage] instead of losing the user's edits. */
+    fun onSave(targetStatus: InvoiceStatus) {
         val branch = branchId.value ?: return
         if (items.value.isEmpty()) return
         viewModelScope.launch {
-            salesRepository.saveInvoice(
-                SalesInvoice(
-                    id = if (isNew) 0L else invoiceId,
-                    invoiceNumber = invoiceNumber.value,
-                    invoiceDate = System.currentTimeMillis(),
-                    customerId = customerId.value,
-                    branchId = branch,
-                    items = items.value.map {
-                        SalesInvoiceItem(
-                            productId = it.productId,
-                            quantity = it.quantity.toDoubleOrNull() ?: 0.0,
-                            unitPrice = it.unitPrice.toDoubleOrNull() ?: 0.0,
-                            discountPercent = it.discountPercent.toDoubleOrNull() ?: 0.0
-                        )
-                    }
+            try {
+                salesRepository.saveInvoice(
+                    SalesInvoice(
+                        id = if (isNew) 0L else invoiceId,
+                        invoiceNumber = invoiceNumber.value,
+                        invoiceDate = System.currentTimeMillis(),
+                        customerId = customerId.value,
+                        branchId = branch,
+                        status = targetStatus,
+                        items = items.value.map {
+                            SalesInvoiceItem(
+                                productId = it.productId,
+                                itemNumberSnapshot = it.itemNumberSnapshot,
+                                itemNameSnapshot = it.productName,
+                                unitSnapshot = it.unitSnapshot,
+                                quantity = it.quantity.toDoubleOrNull() ?: 0.0,
+                                unitPrice = it.unitPrice.toDoubleOrNull() ?: 0.0,
+                                discountPercent = it.discountPercent.toDoubleOrNull() ?: 0.0
+                            )
+                        }
+                    )
                 )
-            )
-            isSaved.value = true
-            publish()
+                status.value = targetStatus
+                isSaved.value = true
+                publish()
+            } catch (e: InsufficientStockException) {
+                errorMessage.value = e.message
+                publish()
+            }
         }
     }
 }

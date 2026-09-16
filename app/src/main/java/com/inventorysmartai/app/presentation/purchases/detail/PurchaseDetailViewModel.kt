@@ -7,6 +7,7 @@ import com.inventorysmartai.app.core.common.UiState
 import com.inventorysmartai.app.domain.model.Branch
 import com.inventorysmartai.app.domain.model.Product
 import com.inventorysmartai.app.domain.model.PurchaseReceipt
+import com.inventorysmartai.app.domain.model.PurchaseReceiptLine
 import com.inventorysmartai.app.domain.model.PurchaseRequest
 import com.inventorysmartai.app.domain.model.PurchaseRequestItem
 import com.inventorysmartai.app.domain.model.PurchaseStatus
@@ -145,16 +146,22 @@ class PurchaseDetailViewModel @Inject constructor(
         }
     }
 
-    /** Marks the request RECEIVED and, via PurchaseRepository.receive(), actually moves stock. */
+    /** Marks the request RECEIVED and, via PurchaseRepository.receive(), actually moves stock.
+     *  Cost/batch/expiry aren't collected by this screen yet — the data layer accepts them
+     *  (see PurchaseReceiptLine) but the UI still only has a quantity field per line. */
     fun onReceiveAll() {
         if (isNew) return
+        val branch = branchId.value ?: return
         viewModelScope.launch {
-            val receivedQuantities = items.value.associate { row ->
-                row.productId to ((row.requestedQuantity.toDoubleOrNull() ?: 0.0) - row.receivedQuantity).coerceAtLeast(0.0)
+            val lines = items.value.map { row ->
+                PurchaseReceiptLine(
+                    productId = row.productId,
+                    quantity = ((row.requestedQuantity.toDoubleOrNull() ?: 0.0) - row.receivedQuantity).coerceAtLeast(0.0)
+                )
             }
             purchaseRepository.receive(
-                PurchaseReceipt(purchaseRequestId = requestId, receivedDate = System.currentTimeMillis()),
-                receivedQuantities
+                PurchaseReceipt(purchaseRequestId = requestId, supplierId = supplierId.value, branchId = branch, receivedDate = System.currentTimeMillis()),
+                lines
             )
             onSave(PurchaseStatus.RECEIVED)
         }

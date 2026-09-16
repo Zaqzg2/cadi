@@ -20,4 +20,24 @@ interface ImportDao {
 
     @Query("SELECT * FROM import_rows WHERE importJobId = :jobId")
     suspend fun getRowsForJob(jobId: Long): List<ImportRowEntity>
+
+    @Query(
+        """UPDATE import_jobs SET status = :status, totalRows = :totalRows, processedRows = :processedRows,
+           acceptedRows = :acceptedRows, matchedRows = :matchedRows, newProductRows = :newProductRows,
+           duplicateRows = :duplicateRows, errorRows = :errorRows, completedAt = :completedAt, updatedAt = :updatedAt
+           WHERE id = :jobId"""
+    )
+    suspend fun updateJobCounts(
+        jobId: Long,
+        status: String,
+        totalRows: Int,
+        processedRows: Int,
+        acceptedRows: Int,
+        matchedRows: Int,
+        newProductRows: Int,
+        duplicateRows: Int,
+        errorRows: Int,
+        completedAt: Long,
+        updatedAt: Long
+    )
 }

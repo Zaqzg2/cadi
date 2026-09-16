@@ -27,7 +27,7 @@ fun ProductCard(summary: ProductStockSummary, onClick: () -> Unit, modifier: Mod
                 StatusChip(summary.status)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                LabeledValue("رقم الصنف", summary.product.itemNumber)
+                summary.product.itemNumber?.let { LabeledValue("رقم الصنف", it) }
                 summary.product.barcode?.let { LabeledValue("الباركود", it) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

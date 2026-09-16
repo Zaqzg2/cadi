@@ -2,9 +2,10 @@ package com.inventorysmartai.app.domain.model
 
 data class Product(
     val id: Long = 0L,
-    val itemNumber: String,
+    val itemNumber: String?,
     val barcode: String?,
     val name: String,
+    val alternateNames: String? = null,
     val categoryId: Long?,
     val categoryName: String? = null,
     val unitId: Long?,
@@ -16,11 +17,12 @@ data class Product(
     val isActive: Boolean = true
 )
 
-/** One branch's stock line for a product (the "Branch stock" section of Product Details). */
+/** One branch+batch stock line for a product (the "Branch stock" section of Product Details). */
 data class BranchStock(
     val branchId: Long,
     val branchName: String,
     val quantity: Double,
+    val batchNumber: String? = null,
     val expiryDate: Long?
 )
 

@@ -18,9 +18,11 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,6 +35,7 @@ import androidx.navigation.NavController
 import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 import com.inventorysmartai.app.core.designsystem.component.StateContent
+import com.inventorysmartai.app.domain.model.InvoiceStatus
 
 @Composable
 fun SalesDetailScreen(navController: NavController, viewModel: SalesDetailViewModel = hiltViewModel()) {
@@ -126,6 +129,20 @@ fun SalesDetailScreen(navController: NavController, viewModel: SalesDetailViewMo
                         }
                     }
 
+                    if (data.errorMessage != null) {
+                        item {
+                            Card(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("تعذّر إتمام الفاتورة", style = MaterialTheme.typography.titleSmall)
+                                    Text(data.errorMessage, style = MaterialTheme.typography.bodyMedium)
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                        TextButton(onClick = viewModel::onErrorShown) { Text("حسنًا") }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     item {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("الإجمالي الكلي", style = MaterialTheme.typography.titleMedium)
@@ -134,8 +151,15 @@ fun SalesDetailScreen(navController: NavController, viewModel: SalesDetailViewMo
                     }
 
                     item {
-                        Button(onClick = viewModel::onSave, modifier = Modifier.fillMaxWidth()) {
-                            Text("حفظ الفاتورة")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { viewModel.onSave(InvoiceStatus.DRAFT) },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("حفظ كمسودة") }
+                            Button(
+                                onClick = { viewModel.onSave(InvoiceStatus.CONFIRMED) },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("إتمام الفاتورة") }
                         }
                     }
                 }

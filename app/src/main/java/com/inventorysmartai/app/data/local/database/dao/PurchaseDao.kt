@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 import com.inventorysmartai.app.data.local.database.entity.PurchaseReceiptEntity
+import com.inventorysmartai.app.data.local.database.entity.PurchaseReceiptItemEntity
 import com.inventorysmartai.app.data.local.database.entity.PurchaseRequestEntity
 import com.inventorysmartai.app.data.local.database.entity.PurchaseRequestItemEntity
 import com.inventorysmartai.app.data.local.database.relation.PurchaseRequestWithItems
@@ -43,4 +44,10 @@ interface PurchaseDao {
 
     @Insert
     suspend fun insertReceipt(receipt: PurchaseReceiptEntity): Long
+
+    @Insert
+    suspend fun insertReceiptItems(items: List<PurchaseReceiptItemEntity>): List<Long>
+
+    @Query("SELECT * FROM purchase_receipt_items WHERE purchaseReceiptId = :receiptId")
+    suspend fun getReceiptItems(receiptId: Long): List<PurchaseReceiptItemEntity>
 }

@@ -76,7 +76,7 @@ private fun BasicInfoTab(data: ProductDetailData) {
         item {
             InfoCard(
                 rows = listOfNotNull(
-                    "رقم الصنف" to p.itemNumber,
+                    p.itemNumber?.let { "رقم الصنف" to it },
                     p.barcode?.let { "الباركود" to it },
                     p.categoryName?.let { "التصنيف" to it },
                     p.unitName?.let { "الوحدة" to it }
@@ -186,5 +186,7 @@ private fun movementLabel(type: MovementType): String = when (type) {
     MovementType.COUNT_ADJUSTMENT -> "تسوية جرد"
     MovementType.TRANSFER_IN -> "تحويل وارد"
     MovementType.TRANSFER_OUT -> "تحويل صادر"
+    MovementType.RETURN_IN -> "مرتجع وارد"
+    MovementType.RETURN_OUT -> "مرتجع صادر"
     MovementType.MANUAL -> "تعديل يدوي"
 }

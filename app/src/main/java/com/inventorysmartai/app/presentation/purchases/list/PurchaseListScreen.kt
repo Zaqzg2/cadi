@@ -87,6 +87,8 @@ private fun statusLabel(status: PurchaseStatus): String = when (status) {
     PurchaseStatus.DRAFT -> "مسودة"
     PurchaseStatus.SUBMITTED -> "مُرسل"
     PurchaseStatus.APPROVED -> "مُعتمد"
+    PurchaseStatus.PARTIALLY_APPROVED -> "مُعتمد جزئيًا"
+    PurchaseStatus.REJECTED -> "مرفوض"
     PurchaseStatus.ORDERED -> "تم الطلب"
     PurchaseStatus.RECEIVED -> "مُستلم"
     PurchaseStatus.CANCELLED -> "ملغى"
@@ -95,6 +97,6 @@ private fun statusLabel(status: PurchaseStatus): String = when (status) {
 @Composable
 private fun statusColor(status: PurchaseStatus) = when (status) {
     PurchaseStatus.RECEIVED -> MaterialTheme.colorScheme.primary
-    PurchaseStatus.CANCELLED -> MaterialTheme.colorScheme.error
+    PurchaseStatus.CANCELLED, PurchaseStatus.REJECTED -> MaterialTheme.colorScheme.error
     else -> MaterialTheme.colorScheme.secondary
 }

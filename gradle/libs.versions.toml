@@ -22,7 +22,8 @@ composeBom = "2026.04.01"
 navigationCompose = "2.9.0"
 # Hilt 2.59+ made AGP 9 mandatory and dropped AGP 8 support entirely — 2.58 is the last
 # version compatible with the AGP 8.13.2 line used here, and already includes the
-# Kotlin 2.3+ metadata fix needed for our Kotlin 2.4.0.
+# Kotlin 2.3+ metadata fix needed for our Kotlin 2.3.20 (confirmed against google/dagger#5001;
+# still current as of a live check against Dagger's own release notes).
 hilt = "2.58"
 hiltNavigationCompose = "1.3.0"
 room = "2.8.4"

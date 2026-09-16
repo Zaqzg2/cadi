@@ -9,9 +9,10 @@ import com.inventorysmartai.app.data.local.database.dao.UnitDao
 import com.inventorysmartai.app.data.local.database.entity.InventoryEntity
 import com.inventorysmartai.app.data.local.database.entity.ProductEntity
 import com.inventorysmartai.app.data.local.datastore.SettingsLocalDataSource
+import com.inventorysmartai.app.domain.inventory.InventoryStatusCalculator
+import com.inventorysmartai.app.domain.matching.ArabicTextNormalizer
 import com.inventorysmartai.app.domain.model.BranchStock
 import com.inventorysmartai.app.domain.model.InventoryMovement
-import com.inventorysmartai.app.domain.model.InventoryStatus
 import com.inventorysmartai.app.domain.model.MovementType
 import com.inventorysmartai.app.domain.model.Product
 import com.inventorysmartai.app.domain.model.ProductStockSummary
@@ -19,7 +20,6 @@ import com.inventorysmartai.app.domain.repository.ProductRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -113,6 +113,8 @@ class ProductRepositoryImpl @Inject constructor(
             itemNumber = product.itemNumber,
             barcode = product.barcode,
             name = product.name,
+            normalizedName = ArabicTextNormalizer.normalize(product.name),
+            alternateNames = product.alternateNames,
             categoryId = product.categoryId,
             unitId = product.unitId,
             minStock = product.minStock,
@@ -138,33 +140,23 @@ class ProductRepositoryImpl @Inject constructor(
                 branchId = it.branchId,
                 branchName = branchNames[it.branchId] ?: "",
                 quantity = it.quantity,
+                batchNumber = it.batchNumber,
                 expiryDate = it.expiryDate
             )
         }
         val totalQuantity = branchStocks.sumOf { it.quantity }
         val nearestExpiryDate = branchStocks.mapNotNull { it.expiryDate }.minOrNull()
-        val status = computeStatus(product, totalQuantity, nearestExpiryDate, nearExpiryWindowDays, now)
+        val status = InventoryStatusCalculator.compute(
+            hasExpiry = product.hasExpiry,
+            minStock = product.minStock,
+            totalQuantity = totalQuantity,
+            nearestExpiryDate = nearestExpiryDate,
+            nearExpiryWindowDays = nearExpiryWindowDays,
+            now = now
+        )
         return ProductStockSummary(product, branchStocks, totalQuantity, nearestExpiryDate, status)
     }
 
-    /** Precedence is deliberate: an expired batch matters more than a merely low count, and a
-     *  zero count matters more than an approaching expiry on a *different*, still-stocked batch. */
-    private fun computeStatus(
-        product: Product,
-        totalQuantity: Double,
-        nearestExpiryDate: Long?,
-        nearExpiryWindowDays: Int,
-        now: Long
-    ): InventoryStatus {
-        val expiryThresholdMillis = now + TimeUnit.DAYS.toMillis(nearExpiryWindowDays.toLong())
-        return when {
-            product.hasExpiry && nearestExpiryDate != null && nearestExpiryDate < now -> InventoryStatus.EXPIRED
-            totalQuantity <= 0.0 -> InventoryStatus.ZERO
-            product.hasExpiry && nearestExpiryDate != null && nearestExpiryDate <= expiryThresholdMillis -> InventoryStatus.NEAR_EXPIRY
-            totalQuantity <= product.minStock -> InventoryStatus.LOW
-            else -> InventoryStatus.AVAILABLE
-        }
-    }
 }
 
 internal fun ProductEntity.toDomain(categoryName: String?, unitName: String?) = Product(
@@ -172,6 +164,7 @@ internal fun ProductEntity.toDomain(categoryName: String?, unitName: String?) = 
     itemNumber = itemNumber,
     barcode = barcode,
     name = name,
+    alternateNames = alternateNames,
     categoryId = categoryId,
     categoryName = categoryName,
     unitId = unitId,

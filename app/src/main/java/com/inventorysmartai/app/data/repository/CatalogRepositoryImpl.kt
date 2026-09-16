@@ -41,13 +41,15 @@ class CatalogRepositoryImpl @Inject constructor(
     override suspend fun upsertBranch(branch: Branch): Long {
         val now = System.currentTimeMillis()
         return branchDao.upsert(
-            BranchEntity(branch.id, branch.name, branch.address, branch.phone, branch.isActive, now, now)
+            BranchEntity(id = branch.id, name = branch.name, code = branch.code, address = branch.address, phone = branch.phone, isActive = branch.isActive, createdAt = now, updatedAt = now)
         )
     }
 
     override suspend fun upsertCategory(category: Category): Long {
         val now = System.currentTimeMillis()
-        return categoryDao.upsert(CategoryEntity(category.id, category.name, category.isActive, now, now))
+        return categoryDao.upsert(
+            CategoryEntity(id = category.id, name = category.name, code = category.code, isActive = category.isActive, createdAt = now, updatedAt = now)
+        )
     }
 
     override suspend fun upsertUnit(unit: UnitOfMeasure): Long {
@@ -82,17 +84,35 @@ class PartyRepositoryImpl @Inject constructor(
 
     override suspend fun upsertCustomer(customer: Customer): Long {
         val now = System.currentTimeMillis()
-        return customerDao.upsert(CustomerEntity(customer.id, customer.name, customer.phone, customer.address, now, now))
+        return customerDao.upsert(
+            CustomerEntity(
+                id = customer.id, customerNumber = customer.customerNumber, name = customer.name,
+                phone = customer.phone, address = customer.address, openingBalance = customer.openingBalance,
+                isActive = customer.isActive, createdAt = now, updatedAt = now
+            )
+        )
     }
 
     override suspend fun upsertSupplier(supplier: Supplier): Long {
         val now = System.currentTimeMillis()
-        return supplierDao.upsert(SupplierEntity(supplier.id, supplier.name, supplier.phone, supplier.address, now, now))
+        return supplierDao.upsert(
+            SupplierEntity(
+                id = supplier.id, supplierNumber = supplier.supplierNumber, name = supplier.name,
+                phone = supplier.phone, address = supplier.address, notes = supplier.notes,
+                isActive = supplier.isActive, createdAt = now, updatedAt = now
+            )
+        )
     }
 }
 
-private fun BranchEntity.toDomain() = Branch(id, name, address, phone, isActive)
-private fun CategoryEntity.toDomain() = Category(id, name, isActive)
+private fun BranchEntity.toDomain() = Branch(id = id, name = name, code = code, address = address, phone = phone, isActive = isActive)
+private fun CategoryEntity.toDomain() = Category(id = id, name = name, code = code, isActive = isActive)
 private fun UnitEntity.toDomain() = UnitOfMeasure(id, name, symbol, isActive)
-private fun CustomerEntity.toDomain() = Customer(id, name, phone, address)
-private fun SupplierEntity.toDomain() = Supplier(id, name, phone, address)
+private fun CustomerEntity.toDomain() = Customer(
+    id = id, customerNumber = customerNumber, name = name, phone = phone, address = address,
+    openingBalance = openingBalance, isActive = isActive
+)
+private fun SupplierEntity.toDomain() = Supplier(
+    id = id, supplierNumber = supplierNumber, name = name, phone = phone, address = address,
+    notes = notes, isActive = isActive
+)

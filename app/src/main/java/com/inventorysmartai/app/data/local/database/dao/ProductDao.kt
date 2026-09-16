@@ -26,6 +26,9 @@ interface ProductDao {
     @Query("SELECT * FROM products WHERE itemNumber = :itemNumber LIMIT 1")
     suspend fun getByItemNumber(itemNumber: String): ProductEntity?
 
+    @Query("SELECT * FROM products WHERE normalizedName = :normalizedName LIMIT 1")
+    suspend fun getByNormalizedName(normalizedName: String): ProductEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(product: ProductEntity): Long
 

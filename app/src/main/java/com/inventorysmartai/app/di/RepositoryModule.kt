@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.di
 
+import com.inventorysmartai.app.data.importing.DeterministicProductMatcher
 import com.inventorysmartai.app.data.repository.AttachmentRepositoryImpl
 import com.inventorysmartai.app.data.repository.CatalogRepositoryImpl
 import com.inventorysmartai.app.data.repository.CountingRepositoryImpl
@@ -11,6 +12,7 @@ import com.inventorysmartai.app.data.repository.PurchaseRepositoryImpl
 import com.inventorysmartai.app.data.repository.ReportsRepositoryImpl
 import com.inventorysmartai.app.data.repository.SalesRepositoryImpl
 import com.inventorysmartai.app.data.repository.SettingsRepositoryImpl
+import com.inventorysmartai.app.domain.importing.ProductMatcher
 import com.inventorysmartai.app.domain.repository.AttachmentRepository
 import com.inventorysmartai.app.domain.repository.CatalogRepository
 import com.inventorysmartai.app.domain.repository.CountingRepository
@@ -42,4 +44,5 @@ abstract class RepositoryModule {
     @Binds @Singleton abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
     @Binds @Singleton abstract fun bindAttachmentRepository(impl: AttachmentRepositoryImpl): AttachmentRepository
     @Binds @Singleton abstract fun bindImportRepository(impl: ImportRepositoryImpl): ImportRepository
+    @Binds @Singleton abstract fun bindProductMatcher(impl: DeterministicProductMatcher): ProductMatcher
 }

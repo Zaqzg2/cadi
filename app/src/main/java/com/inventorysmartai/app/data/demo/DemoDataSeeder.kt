@@ -137,8 +137,16 @@ class DemoDataSeeder @Inject constructor(
         )
         salesDao.insertItems(
             listOf(
-                SalesInvoiceItemEntity(salesInvoiceId = invoiceId, productId = productIds[0], quantity = 3.0, unitPrice = 24.5, createdAt = now, updatedAt = now),
-                SalesInvoiceItemEntity(salesInvoiceId = invoiceId, productId = productIds[5], quantity = 2.0, unitPrice = 14.0, discountPercent = 5.0, createdAt = now, updatedAt = now)
+                SalesInvoiceItemEntity(
+                    salesInvoiceId = invoiceId, productId = productIds[0],
+                    itemNumberSnapshot = seeds[0].itemNo, itemNameSnapshot = seeds[0].name, unitSnapshot = "قطعة",
+                    quantity = 3.0, unitPrice = 24.5, total = 3.0 * 24.5, createdAt = now, updatedAt = now
+                ),
+                SalesInvoiceItemEntity(
+                    salesInvoiceId = invoiceId, productId = productIds[5],
+                    itemNumberSnapshot = seeds[5].itemNo, itemNameSnapshot = seeds[5].name, unitSnapshot = "كجم",
+                    quantity = 2.0, unitPrice = 14.0, discountPercent = 5.0, total = 2.0 * 14.0 * 0.95, createdAt = now, updatedAt = now
+                )
             )
         )
 

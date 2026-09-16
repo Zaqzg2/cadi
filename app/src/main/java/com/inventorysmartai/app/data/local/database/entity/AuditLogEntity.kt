@@ -11,6 +11,7 @@ data class AuditLogEntity(
     val entityId: String,
     val action: String, // AuditAction.name
     val performedBy: String? = null,
-    val details: String? = null,
+    val oldValue: String? = null,
+    val newValue: String? = null,
     val createdAt: Long
 )

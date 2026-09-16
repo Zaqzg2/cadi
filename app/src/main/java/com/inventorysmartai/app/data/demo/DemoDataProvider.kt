@@ -27,14 +27,14 @@ object DemoDataProvider {
     )
 
     val sampleStockSummaries = listOf(
-        ProductStockSummary(sampleProduct, listOf(BranchStock(1L, "الفرع الرئيسي", 48.0, null)), 48.0, null, InventoryStatus.AVAILABLE),
+        ProductStockSummary(sampleProduct, listOf(BranchStock(branchId = 1L, branchName = "الفرع الرئيسي", quantity = 48.0, expiryDate = null)), 48.0, null, InventoryStatus.AVAILABLE),
         ProductStockSummary(
             sampleProduct.copy(id = 2L, itemNumber = "P-0002", name = "زيت دوار الشمس 1.5 لتر"),
-            listOf(BranchStock(1L, "الفرع الرئيسي", 5.0, null)), 5.0, null, InventoryStatus.LOW
+            listOf(BranchStock(branchId = 1L, branchName = "الفرع الرئيسي", quantity = 5.0, expiryDate = null)), 5.0, null, InventoryStatus.LOW
         ),
         ProductStockSummary(
             sampleProduct.copy(id = 3L, itemNumber = "P-0003", name = "سكر أبيض 1 كجم"),
-            listOf(BranchStock(1L, "الفرع الرئيسي", 0.0, null)), 0.0, null, InventoryStatus.ZERO
+            listOf(BranchStock(branchId = 1L, branchName = "الفرع الرئيسي", quantity = 0.0, expiryDate = null)), 0.0, null, InventoryStatus.ZERO
         )
     )
 }

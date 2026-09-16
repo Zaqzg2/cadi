@@ -32,6 +32,7 @@ import com.inventorysmartai.app.data.local.database.entity.InventoryEntity
 import com.inventorysmartai.app.data.local.database.entity.InventoryMovementEntity
 import com.inventorysmartai.app.data.local.database.entity.ProductEntity
 import com.inventorysmartai.app.data.local.database.entity.PurchaseReceiptEntity
+import com.inventorysmartai.app.data.local.database.entity.PurchaseReceiptItemEntity
 import com.inventorysmartai.app.data.local.database.entity.PurchaseRequestEntity
 import com.inventorysmartai.app.data.local.database.entity.PurchaseRequestItemEntity
 import com.inventorysmartai.app.data.local.database.entity.SalesInvoiceEntity
@@ -40,9 +41,16 @@ import com.inventorysmartai.app.data.local.database.entity.SupplierEntity
 import com.inventorysmartai.app.data.local.database.entity.UnitEntity
 
 /**
- * All 21 tables from the ROOM DATA MODEL spec (20 requested + InventoryCountItemEntity, which
- * is a justified addition — see the delivery notes for why). No TypeConverters are needed:
- * every column is a Room-native primitive, and enums are stored as their `.name` String.
+ * All 22 tables from the ROOM DATA MODEL spec (20 requested + InventoryCountItemEntity, already
+ * a justified Phase 1 addition, + PurchaseReceiptItemEntity added in Phase 2 so receipt lines can
+ * carry their own cost/batch/expiry instead of just a running total on the request item). No
+ * TypeConverters are needed: every column is a Room-native primitive, and enums are stored as
+ * their `.name` String.
+ *
+ * version 2 (Phase 2): every Phase-1 table gained spec-required columns (see the "Phase 2" section of README.md)
+ * plus this one new table. Still relying on fallbackToDestructiveMigration (see DatabaseModule)
+ * since no production install exists yet to preserve — replace with real Migration objects
+ * before the first real release.
  */
 @Database(
     entities = [
@@ -52,13 +60,14 @@ import com.inventorysmartai.app.data.local.database.entity.UnitEntity
         InventoryEntity::class, InventoryMovementEntity::class,
         InventoryCountEntity::class, InventoryCountItemEntity::class,
         GoalEntity::class, CommissionEntity::class,
-        PurchaseRequestEntity::class, PurchaseRequestItemEntity::class, PurchaseReceiptEntity::class,
+        PurchaseRequestEntity::class, PurchaseRequestItemEntity::class,
+        PurchaseReceiptEntity::class, PurchaseReceiptItemEntity::class,
         SalesInvoiceEntity::class, SalesInvoiceItemEntity::class,
         AttachmentEntity::class,
         ImportJobEntity::class, ImportRowEntity::class,
         AuditLogEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class InventorySmartDatabase : RoomDatabase() {

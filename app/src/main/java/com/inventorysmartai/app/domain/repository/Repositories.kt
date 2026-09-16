@@ -57,7 +57,7 @@ interface PurchaseRepository {
     fun observeRecentRequests(limit: Int): Flow<List<PurchaseRequest>>
     fun observeRequest(requestId: Long): Flow<PurchaseRequest?>
     suspend fun saveRequest(request: PurchaseRequest): Long
-    suspend fun receive(receipt: PurchaseReceipt, receivedQuantities: Map<Long, Double>)
+    suspend fun receive(receipt: PurchaseReceipt, lines: List<PurchaseReceiptLine>)
 }
 
 interface SalesRepository {
@@ -97,4 +97,5 @@ interface AttachmentRepository {
 interface ImportRepository {
     fun observeJobs(): Flow<List<ImportJob>>
     suspend fun createJob(sourceType: ImportSourceType, fileName: String?): Long
+    suspend fun finalizeJob(jobId: Long, rows: List<ImportRow>)
 }
