@@ -46,6 +46,31 @@ sealed class Destination(val route: String) {
     data object AiAssistant : Destination("assistant")
     data object More : Destination("more")
 
+    // --- Phase 3: bulk import flow. Nested under one graph (route "import_flow") so its four
+    // steps share a single ImportFlowViewModel via Hilt's back-stack-entry scoping — see
+    // AppNavHost. ImportFlow itself is never shown as a screen; it only exists as the shared
+    // ViewModel's scope. ---
+    data object ImportFlow : Destination("import_flow")
+    data object ImportSetup : Destination("import_flow/setup")
+    data object ImportSheetSelect : Destination("import_flow/sheet")
+    data object ImportAnalyzing : Destination("import_flow/analyzing")
+    data object ImportColumnMapping : Destination("import_flow/mapping")
+    data object ImportReview : Destination("import_flow/review")
+
+    data object ImportHistory : Destination("data_center/import_history?filter={filter}") {
+        const val ARG_FILTER = "filter"
+        fun createRoute(filter: String = "all") = "data_center/import_history?filter=$filter"
+    }
+    data object ImportJobDetail : Destination("data_center/import_history/detail/{jobId}") {
+        const val ARG_JOB_ID = "jobId"
+        fun createRoute(jobId: Long) = "data_center/import_history/detail/$jobId"
+    }
+
+    data object PartyList : Destination("data_center/parties/{kind}") {
+        const val ARG_KIND = "kind"
+        fun createRoute(kind: String) = "data_center/parties/$kind"
+    }
+
     data object Settings : Destination("settings")
     data object SettingsAppInfo : Destination("settings/app_info")
     data object SettingsCatalog : Destination("settings/catalog/{type}") {

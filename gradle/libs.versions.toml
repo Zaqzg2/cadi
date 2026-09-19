@@ -29,6 +29,13 @@ hiltNavigationCompose = "1.3.0"
 room = "2.8.4"
 datastore = "1.1.3"
 coroutines = "1.10.1"
+# Phase 3: reads .xlsx. Verified on Maven Central (org.dhatim:fastexcel-reader) — Apache POI is
+# only a `test`-scope dependency of this artifact, not pulled in at runtime, and it depends only
+# on aalto-xml (a self-contained StAX implementation, not Android's broken javax.xml.stream stub)
+# and commons-compress, both plain Java with no java.awt/javax.swing use. ":fastexcel" (no
+# "-reader" suffix) is the same project's writer, used only from unit tests to generate .xlsx
+# fixtures — never shipped in the app itself.
+fastexcel = "0.20.2"
 junit = "4.13.2"
 androidxTestExtJunit = "1.2.1"
 espressoCore = "3.6.1"
@@ -58,6 +65,9 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
+
+fastexcel-reader = { group = "org.dhatim", name = "fastexcel-reader", version.ref = "fastexcel" }
+fastexcel-writer = { group = "org.dhatim", name = "fastexcel", version.ref = "fastexcel" }
 
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }

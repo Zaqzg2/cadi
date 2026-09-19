@@ -43,4 +43,13 @@ object Formatters {
         val formatter = java.text.SimpleDateFormat("yyyy/MM/dd", Locale.US)
         return formatter.format(java.util.Date(epochMillis))
     }
+
+    /** Phase 3: shown on the file-picker step (spec section 2's "file size"). Deliberately plain
+     *  KB/MB arithmetic, always Western digits — a file size is a technical detail, not a
+     *  business number, so it doesn't participate in [useArabicIndicDigits]. */
+    fun formatFileSize(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes بايت"
+        bytes < 1024 * 1024 -> "%.1f كيلوبايت".format(bytes / 1024.0)
+        else -> "%.1f ميجابايت".format(bytes / (1024.0 * 1024.0))
+    }
 }

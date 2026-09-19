@@ -33,31 +33,42 @@ jobs:
       - name: Regenerate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.14.4 --distribution-type bin
 
+      # Phase 3 spec section 27: "./gradlew test" before "./gradlew assembleDebug". Runs first so
+      # a broken pipeline test fails fast without waiting for a full APK assembly.
+      - name: Run unit tests
+        id: unit_tests
+        run: |
+          set -o pipefail
+          ./gradlew test --stacktrace 2>&1 | tee unit-test-output.log
+        continue-on-error: true
+
       - name: Build debug APK
         id: build
+        if: steps.unit_tests.outcome == 'success'
         run: |
           set -o pipefail
           ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build-output.log
         continue-on-error: true
 
       - name: Collect failure logs
-        if: steps.build.outcome == 'failure'
+        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure'
         run: |
           mkdir -p ci-failure-logs
+          cp unit-test-output.log ci-failure-logs/ 2>/dev/null || true
           cp build-output.log ci-failure-logs/ 2>/dev/null || true
           [ -d app/build/reports ] && cp -r app/build/reports ci-failure-logs/app-build-reports
           exit 0
 
       - name: Upload failure logs
-        if: steps.build.outcome == 'failure'
+        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ci-failure-logs
           path: ci-failure-logs/
           if-no-files-found: warn
 
-      - name: Fail job if build failed
-        if: steps.build.outcome == 'failure'
+      - name: Fail job if tests or build failed
+        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure'
         run: exit 1
 
       - name: Upload APK

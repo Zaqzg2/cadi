@@ -44,4 +44,39 @@ class ArabicTextNormalizerTest {
     fun `blank input stays blank`() {
         assertEquals("", ArabicTextNormalizer.normalize("   "))
     }
+
+    // --- Phase 3 additions: digit-variant and punctuation handling for import normalization ---
+
+    @Test
+    fun `Arabic-Indic digits normalize to the same string as ASCII digits`() {
+        val arabicIndic = ArabicTextNormalizer.normalize("أرز بسمتي ٥ كجم")
+        val ascii = ArabicTextNormalizer.normalize("ارز بسمتي 5 كجم")
+        assertEquals(ascii, arabicIndic)
+    }
+
+    @Test
+    fun `Persian digits normalize to the same string as ASCII digits`() {
+        val persian = ArabicTextNormalizer.normalize("أرز بسمتي ۵ كجم")
+        val ascii = ArabicTextNormalizer.normalize("ارز بسمتي 5 كجم")
+        assertEquals(ascii, persian)
+    }
+
+    @Test
+    fun `normalizeDigits leaves non-digit characters untouched`() {
+        assertEquals("حليب 5", ArabicTextNormalizer.normalizeDigits("حليب \u0665"))
+    }
+
+    @Test
+    fun `punctuation separating words normalizes like a plain space, without fusing the words`() {
+        val withDash = ArabicTextNormalizer.normalize("دجاج-مشوي")
+        val withSpace = ArabicTextNormalizer.normalize("دجاج مشوي")
+        assertEquals(withSpace, withDash)
+    }
+
+    @Test
+    fun `Arabic comma and question mark do not change the comparison key`() {
+        val withPunctuation = ArabicTextNormalizer.normalize("صنف جديد؟")
+        val without = ArabicTextNormalizer.normalize("صنف جديد")
+        assertEquals(without, withPunctuation)
+    }
 }

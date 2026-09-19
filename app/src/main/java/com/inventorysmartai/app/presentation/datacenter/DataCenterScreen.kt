@@ -44,6 +44,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.ImportSourceType
+import com.inventorysmartai.app.navigation.Destination
 
 private data class ImportTile(val type: ImportSourceType, val label: String, val icon: ImageVector)
 
@@ -55,6 +56,26 @@ private val importTiles = listOf(
     ImportTile(ImportSourceType.CAMERA, "الكاميرا", Icons.Filled.CameraAlt),
     ImportTile(ImportSourceType.BARCODE, "الباركود", Icons.Filled.QrCodeScanner),
     ImportTile(ImportSourceType.MANUAL, "إدخال يدوي", Icons.Filled.Edit)
+)
+
+private data class MasterDataTile(val label: String, val route: String)
+
+private val masterDataTiles = listOf(
+    MasterDataTile("الأصناف", Destination.Inventory.route),
+    MasterDataTile("الفروع", Destination.SettingsCatalog.createRoute("branch")),
+    MasterDataTile("التصنيفات", Destination.SettingsCatalog.createRoute("category")),
+    MasterDataTile("الوحدات", Destination.SettingsCatalog.createRoute("unit")),
+    MasterDataTile("العملاء", Destination.PartyList.createRoute("customer")),
+    MasterDataTile("الموردون", Destination.PartyList.createRoute("supplier"))
+)
+
+private data class OperationTile(val label: String, val filter: String)
+
+private val operationTiles = listOf(
+    OperationTile("سجل الاستيراد", "all"),
+    OperationTile("قيد المراجعة", "review"),
+    OperationTile("الأخطاء", "errors"),
+    OperationTile("المقبولة", "completed")
 )
 
 private val externalServices = listOf("Google Drive", "Google Sheets", "Google Docs")
@@ -91,7 +112,17 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
                     items(importTiles) { tile ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            onClick = { viewModel.onImportTileTapped(tile.type) }
+                            onClick = {
+                                // Excel/CSV both go through the same real import flow — the
+                                // FileDetector step sniffs the actual file content regardless of
+                                // which tile was tapped, so there's no separate "wrong tile"
+                                // failure mode for a mis-tapped Excel-vs-CSV choice.
+                                if (tile.type == ImportSourceType.EXCEL || tile.type == ImportSourceType.CSV) {
+                                    navController.navigate(Destination.ImportSetup.route)
+                                } else {
+                                    viewModel.onImportTileTapped(tile.type)
+                                }
+                            }
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -102,6 +133,39 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
                                 Text(tile.label, style = MaterialTheme.typography.labelMedium)
                             }
                         }
+                    }
+                }
+            }
+
+            item { Text("البيانات الأساسية", style = MaterialTheme.typography.titleMedium) }
+            item {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxWidth().height(170.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(masterDataTiles) { tile ->
+                        Card(modifier = Modifier.fillMaxWidth(), onClick = { navController.navigate(tile.route) }) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(tile.label, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+            }
+
+            item { Text("العمليات", style = MaterialTheme.typography.titleMedium) }
+            items(operationTiles) { tile ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { navController.navigate(Destination.ImportHistory.createRoute(tile.filter)) }
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(tile.label, style = MaterialTheme.typography.bodyLarge)
                     }
                 }
             }

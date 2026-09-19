@@ -23,11 +23,34 @@ enum class CommissionType { PERCENTAGE, FIXED }
 
 enum class ImportSourceType { EXCEL, CSV, PDF, IMAGE, CAMERA, BARCODE, MANUAL }
 
-enum class ImportJobStatus { PENDING, PROCESSING, REVIEW_REQUIRED, COMPLETED, FAILED }
+// Phase 3 spec: PROCESSING, REVIEW, COMPLETED, PARTIALLY_COMPLETED, FAILED, CANCELLED.
+// PENDING (job row created, file not analyzed yet) and REVIEW_REQUIRED (== spec's "REVIEW") were
+// already in use from Phase 1/2 and are kept as-is; PARTIALLY_COMPLETED and CANCELLED were
+// genuinely missing and are added here.
+enum class ImportJobStatus { PENDING, PROCESSING, REVIEW_REQUIRED, COMPLETED, PARTIALLY_COMPLETED, FAILED, CANCELLED }
 
 // Spec: PENDING, MATCHED, NEW_PRODUCT, DUPLICATE, ERROR, ACCEPTED, REJECTED — each tracked
 // separately so "accepted rows" is never conflated with "unique products" (see ImportJob counts).
-enum class ImportRowStatus { PENDING, MATCHED, NEW_PRODUCT, DUPLICATE, ERROR, ACCEPTED, REJECTED }
+// AMBIGUOUS is Phase 3's addition for ProductMatcher's AMBIGUOUS match status (spec section 10) —
+// distinct from ERROR (a validation failure) and from PENDING (not analyzed yet / needs a manual
+// decision but isn't inherently a problem).
+enum class ImportRowStatus { PENDING, MATCHED, NEW_PRODUCT, AMBIGUOUS, DUPLICATE, ERROR, ACCEPTED, REJECTED }
+
+/** Structured error codes, verbatim from the Phase 3 spec's "Error Management" section — stored
+ *  against an ImportRow (see ImportRowEntity.errorCode) instead of only a free-text message, so
+ *  the review UI can group/filter/localize without string-matching. */
+enum class ImportErrorCode {
+    MISSING_REQUIRED_FIELD,
+    INVALID_NUMBER,
+    INVALID_DATE,
+    INVALID_BARCODE,
+    AMBIGUOUS_PRODUCT,
+    DUPLICATE_ROW,
+    UNSUPPORTED_FORMAT,
+    EMPTY_FILE,
+    INVALID_HEADER,
+    DATABASE_ERROR
+}
 
 enum class AttachmentOwnerType { PRODUCT, PURCHASE_REQUEST, SALES_INVOICE, INVENTORY_COUNT }
 

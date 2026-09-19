@@ -17,7 +17,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.1.0" // Phase 1: foundation only — no external integrations yet.
+        versionName = "0.3.0" // Phase 3: Smart Data Center + Excel/CSV import pipeline.
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -93,7 +93,12 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
+    // Phase 3: Excel (.xlsx) reading — see libs.versions.toml for why this specific artifact.
+    implementation(libs.fastexcel.reader)
+    // CSV is hand-parsed (see data/importing/parser/CsvImportParser.kt) — no dependency needed.
+
     testImplementation(libs.junit)
+    testImplementation(libs.fastexcel.writer) // builds real .xlsx fixtures for ExcelImportParser tests
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.ui.test.junit4)

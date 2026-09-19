@@ -25,6 +25,7 @@ import com.inventorysmartai.app.data.local.database.entity.CommissionEntity
 import com.inventorysmartai.app.data.local.database.entity.CustomerEntity
 import com.inventorysmartai.app.data.local.database.entity.GoalEntity
 import com.inventorysmartai.app.data.local.database.entity.ImportJobEntity
+import com.inventorysmartai.app.data.local.database.entity.ImportMappingTemplateEntity
 import com.inventorysmartai.app.data.local.database.entity.ImportRowEntity
 import com.inventorysmartai.app.data.local.database.entity.InventoryCountEntity
 import com.inventorysmartai.app.data.local.database.entity.InventoryCountItemEntity
@@ -48,9 +49,12 @@ import com.inventorysmartai.app.data.local.database.entity.UnitEntity
  * their `.name` String.
  *
  * version 2 (Phase 2): every Phase-1 table gained spec-required columns (see the "Phase 2" section of README.md)
- * plus this one new table. Still relying on fallbackToDestructiveMigration (see DatabaseModule)
- * since no production install exists yet to preserve — replace with real Migration objects
- * before the first real release.
+ * plus this one new table. version 3 (Phase 3): import_jobs/import_rows gained the columns the
+ * real Excel/CSV pipeline needs (importType, sheetName, branch/supplier context, error codes,
+ * warnings — see ImportEntities.kt) plus one new table, import_mapping_templates (spec section
+ * 20). Still relying on fallbackToDestructiveMigration (see DatabaseModule) since no production
+ * install exists yet to preserve — replace with real Migration objects before the first real
+ * release.
  */
 @Database(
     entities = [
@@ -64,10 +68,10 @@ import com.inventorysmartai.app.data.local.database.entity.UnitEntity
         PurchaseReceiptEntity::class, PurchaseReceiptItemEntity::class,
         SalesInvoiceEntity::class, SalesInvoiceItemEntity::class,
         AttachmentEntity::class,
-        ImportJobEntity::class, ImportRowEntity::class,
+        ImportJobEntity::class, ImportRowEntity::class, ImportMappingTemplateEntity::class,
         AuditLogEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class InventorySmartDatabase : RoomDatabase() {

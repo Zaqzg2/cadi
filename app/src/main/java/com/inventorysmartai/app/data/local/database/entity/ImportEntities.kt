@@ -7,9 +7,10 @@ import androidx.room.PrimaryKey
 
 /**
  * Schema-complete for Phase 2's counting requirements ("acceptedRows != number of unique
- * products" — each of these is tracked independently). No parser/matcher writes real rows
- * here yet; that's the file-import pipeline, still out of scope for this phase (Gemini/OCR/
- * external APIs are explicitly excluded here).
+ * products" — each of these is tracked independently). Phase 3 wires up the real Excel/CSV
+ * pipeline that actually writes rows here (see data/importing and ImportRepositoryImpl); the
+ * Phase 3 additions below are all nullable/defaulted so nothing that already constructs these
+ * entities with named arguments needs to change.
  */
 @Entity(tableName = "import_jobs")
 data class ImportJobEntity(
@@ -26,7 +27,15 @@ data class ImportJobEntity(
     val errorRows: Int? = null,
     val createdAt: Long,
     val completedAt: Long? = null,
-    val updatedAt: Long
+    val updatedAt: Long,
+    // --- Phase 3 additions ---
+    val importType: String? = null, // ImportType.name
+    val sheetName: String? = null,
+    val defaultBranchId: Long? = null,
+    val defaultSupplierId: Long? = null,
+    val fileSizeBytes: Long? = null,
+    val mimeType: String? = null,
+    val rejectedRows: Int? = null
 )
 
 @Entity(
@@ -45,5 +54,24 @@ data class ImportRowEntity(
     val confidence: Double? = null,
     val status: String, // ImportRowStatus.name
     val errorMessage: String? = null,
-    val createdAt: Long
+    val createdAt: Long,
+    // --- Phase 3 additions ---
+    val errorCode: String? = null, // ImportErrorCode.name
+    val warningsJson: String? = null,
+    val edited: Boolean = false
+)
+
+/** Phase 3, spec section 20 ("Import Templates"). One saved column mapping for a given
+ *  [com.inventorysmartai.app.domain.importing.ImportType], offered again on a future import
+ *  whose headers sufficiently match (see ImportMappingTemplate.structureMatchRatio) — never
+ *  applied automatically below that threshold. */
+@Entity(tableName = "import_mapping_templates")
+data class ImportMappingTemplateEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0L,
+    val name: String,
+    val importType: String, // ImportType.name
+    val headerFingerprint: String,
+    val mappingJson: String,
+    val createdAt: Long,
+    val updatedAt: Long
 )

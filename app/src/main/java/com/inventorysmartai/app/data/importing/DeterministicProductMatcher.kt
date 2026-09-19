@@ -16,8 +16,9 @@ import javax.inject.Singleton
  *
  * A row with a name but no deterministic hit comes back as [MatchResult.NewProduct] rather than
  * [MatchResult.Unresolved] — it's a specific, actionable outcome ("create this product") that the
- * human review step (ImportReview) can act on directly. [MatchResult.Unresolved] is reserved for
- * rows with nothing usable to match or name a product by at all.
+ * human review step ([com.inventorysmartai.app.domain.importing.ImportReviewManager]) can act on
+ * directly. [MatchResult.Unresolved] is reserved for rows with nothing usable to match or name a
+ * product by at all.
  */
 @Singleton
 class DeterministicProductMatcher @Inject constructor(

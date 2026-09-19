@@ -1,5 +1,9 @@
 package com.inventorysmartai.app.domain.repository
 
+import com.inventorysmartai.app.domain.importing.ImportField
+import com.inventorysmartai.app.domain.importing.ImportMappingTemplate
+import com.inventorysmartai.app.domain.importing.ImportType
+import com.inventorysmartai.app.domain.importing.PipelineAnalysisResult
 import com.inventorysmartai.app.domain.model.*
 import kotlinx.coroutines.flow.Flow
 
@@ -93,9 +97,77 @@ interface AttachmentRepository {
     suspend fun deleteAttachment(id: Long)
 }
 
-/** Phase 1: bookkeeping only. No parser/matcher is wired up yet — see domain/importing. */
+/**
+ * Phase 1/2 shipped [createJob]/[finalizeJob] as bookkeeping only. Phase 3 wires up the real
+ * pipeline for EXCEL/CSV x PRODUCTS/INVENTORY/COUNTING/PURCHASE_REQUESTS/GOALS (see
+ * domain/importing and [com.inventorysmartai.app.data.repository.ImportRepositoryImpl]) —
+ * [createJob]/[finalizeJob] are kept unchanged, still used as-is for the PDF/IMAGE/CAMERA/BARCODE
+ * placeholders, which remain out of scope (no OCR/AI parsing here) exactly as before.
+ */
 interface ImportRepository {
     fun observeJobs(): Flow<List<ImportJob>>
+    fun observeJob(jobId: Long): Flow<ImportJob?>
+    suspend fun getJob(jobId: Long): ImportJob?
+
     suspend fun createJob(sourceType: ImportSourceType, fileName: String?): Long
     suspend fun finalizeJob(jobId: Long, rows: List<ImportRow>)
+
+    /** Creates a job for the real EXCEL/CSV pipeline, carrying the extra context the spec's
+     *  "اختر نوع البيانات" step gathers before analysis even starts. */
+    suspend fun startImportJob(
+        sourceType: ImportSourceType,
+        fileName: String?,
+        fileSizeBytes: Long?,
+        mimeType: String?,
+        importType: ImportType,
+        sheetName: String?,
+        defaultBranchId: Long?,
+        defaultSupplierId: Long?
+    ): Long
+
+    /** Persists one [PipelineAnalysisResult] as pending [ImportRow]s and moves the job to
+     *  REVIEW_REQUIRED — this is what the Review screen (backed by
+     *  [com.inventorysmartai.app.domain.importing.ImportReviewManager]) reads afterwards; nothing
+     *  here touches production tables yet. Re-analyzing the same job (e.g. after the sheet or
+     *  column mapping changes) replaces the previously persisted pending rows rather than
+     *  appending to them. */
+    suspend fun persistAnalysis(jobId: Long, analysis: PipelineAnalysisResult)
+
+    /** Step 12 (Approval): the ONE place production tables are actually written, inside a single
+     *  database transaction per the spec's "transactional save" requirement (section 17). Rolls
+     *  back entirely on failure ("اعتماد الاستيراد" is all-or-nothing per job) and leaves the job
+     *  available for retry rather than leaving it half-applied. */
+    suspend fun approveJob(jobId: Long): ImportApprovalResult
+
+    suspend fun cancelJob(jobId: Long)
+
+    // --- Import mapping templates (spec section 20) ---
+    fun observeMappingTemplates(importType: ImportType): Flow<List<ImportMappingTemplate>>
+    suspend fun saveMappingTemplate(
+        name: String,
+        importType: ImportType,
+        headers: List<String>,
+        mapping: Map<String, ImportField>
+    ): Long
+
+    /** The best saved template for this file's headers, or null if nothing clears
+     *  [ImportMappingTemplate.AUTO_OFFER_THRESHOLD] — "do not automatically apply it if the
+     *  structure does not match sufficiently". */
+    suspend fun findBestMatchingTemplate(importType: ImportType, headers: List<String>): ImportMappingTemplate?
 }
+
+/** Outcome of [ImportRepository.approveJob]. Only rows a human marked ACCEPTED during review are
+ *  ever written, and they are written together in ONE transaction: [status] is COMPLETED when
+ *  every row in the job ended up ACCEPTED and the transaction succeeded, PARTIALLY_COMPLETED when
+ *  the transaction succeeded but some rows were REJECTED/ignored/left as errors by the human
+ *  (a genuinely normal outcome — the spec's own worked example, "Total rows: 120 / Accepted
+ *  rows: 108", is exactly this), or FAILED when the transaction itself threw — in which case it
+ *  rolled back completely and [savedRows] is 0, per the spec's "rollback, show error, keep
+ *  import available for retry" (section 17). */
+data class ImportApprovalResult(
+    val jobId: Long,
+    val status: ImportJobStatus,
+    val savedRows: Int,
+    val failedRows: Int,
+    val errorMessage: String? = null
+)
