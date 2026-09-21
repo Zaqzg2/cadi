@@ -74,7 +74,7 @@ interface ImportPipeline {
         importType: ImportType,
         importJobId: Long,
         columnMappingOverride: ColumnMappingResult? = null,
-        onProgress: suspend (processed: Int, total: Int) -> Unit = {}
+        onProgress: suspend (processed: Int, total: Int) -> Unit = { _, _ -> }
     ): PipelineAnalysisResult
 }
 

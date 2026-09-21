@@ -29,6 +29,15 @@ enum class ImportField(val labelAr: String, val isNumeric: Boolean = false) {
     NOTES("ملاحظات"),
     IGNORE("تجاهل هذا العمود");
 
+    /** Declared here (a plain nested class of [ImportField]), NOT inside the `companion object`
+     *  below — Kotlin only lets you drop the `.Companion.` qualifier for functions/properties
+     *  defined in a companion object, never for a class nested inside one, so `ImportField.
+     *  Suggestion` used from another file would otherwise fail to resolve at all. As a direct
+     *  nested class it is still visible from the companion object's own members below (sibling
+     *  nested declarations of the same outer class see each other), and callers elsewhere can
+     *  write the natural `ImportField.Suggestion`. */
+    data class Suggestion(val field: ImportField, val requiresConfirmation: Boolean, val exact: Boolean)
+
     companion object {
         /**
          * One dictionary entry: a set of known header variants (already run through
@@ -133,7 +142,5 @@ enum class ImportField(val labelAr: String, val isNumeric: Boolean = false) {
 
             return candidate?.let { (entry, _, _) -> Suggestion(entry.field, requiresConfirmation = entry.requiresConfirmation, exact = false) }
         }
-
-        data class Suggestion(val field: ImportField, val requiresConfirmation: Boolean, val exact: Boolean)
     }
 }
