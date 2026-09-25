@@ -49,6 +49,10 @@ interface ImportDao {
     @Query("UPDATE import_jobs SET status = :status, updatedAt = :updatedAt WHERE id = :jobId")
     suspend fun updateJobStatus(jobId: Long, status: String, updatedAt: Long)
 
+    /** Phase 4: document-level fields Gemini extracted (see ImportJob.metadataJson's doc comment). */
+    @Query("UPDATE import_jobs SET metadataJson = :metadataJson WHERE id = :jobId")
+    suspend fun updateJobMetadata(jobId: Long, metadataJson: String?)
+
     @Query(
         """UPDATE import_jobs SET status = :status, totalRows = :totalRows, processedRows = :processedRows,
            acceptedRows = :acceptedRows, matchedRows = :matchedRows, newProductRows = :newProductRows,

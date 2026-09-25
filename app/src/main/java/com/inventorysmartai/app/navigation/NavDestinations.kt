@@ -78,6 +78,8 @@ sealed class Destination(val route: String) {
         fun createRoute(type: String) = "settings/catalog/$type"
     }
     data object SettingsInventory : Destination("settings/inventory_settings")
+    // --- Phase 4 ---
+    data object GoogleServicesStatus : Destination("settings/google_services")
     data object SettingsPlaceholder : Destination("settings/placeholder/{key}") {
         const val ARG_KEY = "key"
         fun createRoute(key: String) = "settings/placeholder/$key"

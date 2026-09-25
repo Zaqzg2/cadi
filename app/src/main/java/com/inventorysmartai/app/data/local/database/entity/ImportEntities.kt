@@ -35,7 +35,10 @@ data class ImportJobEntity(
     val defaultSupplierId: Long? = null,
     val fileSizeBytes: Long? = null,
     val mimeType: String? = null,
-    val rejectedRows: Int? = null
+    val rejectedRows: Int? = null,
+    // --- Phase 4 additions ---
+    val sourceAttachmentId: Long? = null,
+    val metadataJson: String? = null
 )
 
 @Entity(

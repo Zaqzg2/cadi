@@ -142,7 +142,13 @@ data class ParsedImportRow(
     val quantity: Double?,
     val rawJson: String,
     val importType: ImportType = ImportType.PRODUCTS,
-    val fields: Map<ImportField, NormalizedValue> = emptyMap()
+    val fields: Map<ImportField, NormalizedValue> = emptyMap(),
+    /** Phase 4: warnings the SOURCE itself already flagged before this row ever reached the
+     *  deterministic pipeline — currently just Gemini's per-field "uncertain" flags and
+     *  document/row-level warnings (see domain/importing/ai/AiExtractionMapper.kt). Always empty
+     *  for a tabular CSV/Excel row. [DefaultImportValidator] folds these into its own returned
+     *  warnings rather than the review screen needing to know about two separate warning sources. */
+    val sourceWarnings: List<String> = emptyList()
 ) {
     fun rawValue(field: ImportField): String? = fields[field]?.raw
     fun normalizedValue(field: ImportField): String? = fields[field]?.normalized

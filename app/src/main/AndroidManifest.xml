@@ -3,10 +3,16 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      Phase 1 is fully offline by design: no network, camera, or storage permissions.
-      Add INTERNET / CAMERA / storage permissions when the corresponding integration
-      (Gemini, Drive, Sheets, Docs, Gmail, Calendar, barcode/camera import) is implemented.
+      Phases 1-3 were fully offline by design. Phase 4 adds real network calls (to this app's
+      OWN backend only — see backend/README.md — never directly to Gemini or a Google API), so
+      INTERNET is now required.
+      Deliberately NOT added: CAMERA (Phase 4's "photographed document" sources are supplied via
+      the existing Storage Access Framework file picker, which needs no runtime permission — a
+      dedicated in-app camera capture (CameraX) was judged a larger, separate feature than this
+      phase's actual ask and is left as a future enhancement) and any storage permission (SAF
+      needs none either).
     -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".InventorySmartApp"

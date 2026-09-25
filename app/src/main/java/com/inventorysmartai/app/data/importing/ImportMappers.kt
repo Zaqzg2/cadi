@@ -38,7 +38,9 @@ fun ImportJobEntity.toDomain(): ImportJob = ImportJob(
     defaultSupplierId = defaultSupplierId,
     fileSizeBytes = fileSizeBytes,
     mimeType = mimeType,
-    rejectedRows = rejectedRows
+    rejectedRows = rejectedRows,
+    sourceAttachmentId = sourceAttachmentId,
+    metadataJson = metadataJson
 )
 
 fun ImportRowEntity.toDomain(): ImportRow = ImportRow(

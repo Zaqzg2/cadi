@@ -40,7 +40,7 @@ private val catalogRows = listOf(
 private val placeholderRows = listOf(
     SettingsRow("النسخ الاحتياطي", Destination.SettingsPlaceholder.createRoute("backup")),
     SettingsRow("المزامنة", Destination.SettingsPlaceholder.createRoute("sync")),
-    SettingsRow("الحساب", Destination.SettingsPlaceholder.createRoute("account")),
+    SettingsRow("الحساب وخدمات Google", Destination.GoogleServicesStatus.route),
     SettingsRow("الصلاحيات", Destination.SettingsPlaceholder.createRoute("permissions")),
     SettingsRow("إعدادات الذكاء الاصطناعي", Destination.SettingsPlaceholder.createRoute("ai_settings"))
 )

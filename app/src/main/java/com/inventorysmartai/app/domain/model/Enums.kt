@@ -49,12 +49,26 @@ enum class ImportErrorCode {
     UNSUPPORTED_FORMAT,
     EMPTY_FILE,
     INVALID_HEADER,
-    DATABASE_ERROR
+    DATABASE_ERROR,
+    // --- Phase 4 ---
+    /** The backend/Gemini call itself failed (timeout, quota, network, invalid/unparseable
+     *  output) — distinct from every code above, which describes a business-rule problem with a
+     *  row the model DID successfully return. */
+    AI_EXTRACTION_FAILED,
+    /** Not a hard failure — a row-level marker surfaced as a warning (see
+     *  ImportRow.warningsJson) when the model itself flagged a field as `uncertain` (illegible
+     *  handwriting, smudged print, ...), so the review screen highlights it even though the row
+     *  otherwise passed deterministic validation. */
+    AI_LOW_CONFIDENCE
 }
 
-enum class AttachmentOwnerType { PRODUCT, PURCHASE_REQUEST, SALES_INVOICE, INVENTORY_COUNT }
+enum class AttachmentOwnerType { PRODUCT, PURCHASE_REQUEST, SALES_INVOICE, INVENTORY_COUNT, IMPORT_JOB }
 
-enum class AuditAction { CREATE, UPDATE, DELETE, IMPORT, APPROVE, REJECT, ADJUST_STOCK }
+enum class AuditAction {
+    CREATE, UPDATE, DELETE, IMPORT, APPROVE, REJECT, ADJUST_STOCK,
+    // --- Phase 4: verbatim from the spec's AUDIT section ---
+    AI_IMPORT, AI_ANALYSIS, GOOGLE_DRIVE_UPLOAD, GOOGLE_SHEET_EXPORT, GOOGLE_DOC_CREATE, GMAIL_SEND, CALENDAR_CREATE
+}
 
 enum class AlertSeverity { INFO, WARNING, CRITICAL }
 

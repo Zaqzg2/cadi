@@ -68,12 +68,46 @@ data class PipelineAnalysisResult(
  *  plain callback rather than this function returning a Flow so the pure analysis logic stays
  *  trivially unit-testable with a no-op lambda; the caller (ImportEngine) is what turns this into
  *  a Flow<ImportProgress> for the UI. */
+/**
+ * Which canonical field represents "the quantity" depends on what kind of import this is — a
+ * purchase request's meaningful quantity is what was *requested*, a count's is what was *counted*,
+ * etc. Shared by [DefaultImportPipeline.buildParsedRow] (tabular sources) and
+ * `domain.importing.ai.AiExtractionMapper` (AI-extracted sources, Phase 4) so both derive
+ * [ParsedImportRow.quantity] identically — if this rule ever changes, both sources of rows change
+ * with it, rather than risking two copies quietly drifting apart.
+ */
+internal fun quantityFieldFor(importType: ImportType, fields: Map<ImportField, NormalizedValue>): Double? = when (importType) {
+    ImportType.INVENTORY -> fields[ImportField.CURRENT_STOCK]?.numeric
+    ImportType.COUNTING -> fields[ImportField.COUNTED_QUANTITY]?.numeric
+    ImportType.PURCHASE_REQUESTS -> fields[ImportField.REQUESTED_QUANTITY]?.numeric
+    ImportType.GOALS -> fields[ImportField.TARGET]?.numeric
+    ImportType.PRODUCTS, ImportType.SALES_INVOICES -> fields[ImportField.QUANTITY]?.numeric
+}
+
 interface ImportPipeline {
     suspend fun analyze(
         table: RawTable,
         importType: ImportType,
         importJobId: Long,
         columnMappingOverride: ColumnMappingResult? = null,
+        onProgress: suspend (processed: Int, total: Int) -> Unit = { _, _ -> }
+    ): PipelineAnalysisResult
+
+    /**
+     * Phase 4: the AI-extraction entry point. A photographed/PDF document has no literal
+     * spreadsheet columns to detect a header row in or map — Gemini already returned field-level
+     * values directly (see the app's `domain/importing/ai/AiExtractionMapper`, which turns the
+     * backend's structured JSON into [rows] here, running each field's raw text through the exact
+     * same [Normalizer] a spreadsheet cell would go through). So this method starts one stage
+     * later than [analyze]: no [HeaderRowDetector], no [ColumnMapper] — but every stage after that
+     * (duplicate detection, deterministic validation, [ProductMatcher]) is IDENTICAL code to
+     * [analyze], via the shared private `runAnalyses` below, so an AI-sourced row and a
+     * spreadsheet-sourced row are validated and matched by exactly one code path, never two that
+     * could quietly disagree.
+     */
+    suspend fun analyzeRows(
+        rows: List<ParsedImportRow>,
+        importType: ImportType,
         onProgress: suspend (processed: Int, total: Int) -> Unit = { _, _ -> }
     ): PipelineAnalysisResult
 }
@@ -117,13 +151,65 @@ class DefaultImportPipeline @Inject constructor(
             }
         }
 
-        val total = parsedRows.size
-        val analyses = parsedRows.mapIndexed { position, row ->
+        val analyses = runAnalyses(parsedRows, duplicateOfByIndex, onProgress)
+
+        return PipelineAnalysisResult(
+            importType = importType,
+            headerRowIndex = headerResult?.headerRowIndex,
+            headers = headers,
+            columnMapping = mapping,
+            analyses = analyses,
+            skippedBlankRows = skippedBlank
+        )
+    }
+
+    override suspend fun analyzeRows(
+        rows: List<ParsedImportRow>,
+        importType: ImportType,
+        onProgress: suspend (processed: Int, total: Int) -> Unit
+    ): PipelineAnalysisResult {
+        val duplicateGroups = duplicateDetector.findInFileDuplicates(rows)
+        val duplicateOfByIndex = buildMap {
+            duplicateGroups.forEach { group ->
+                group.duplicateRowIndexes.forEach { dupPos -> put(dupPos, group.rowIndexes.first()) }
+            }
+        }
+
+        val analyses = runAnalyses(rows, duplicateOfByIndex, onProgress)
+
+        // A synthetic, identity "column mapping" — one entry per field actually present across
+        // the extracted rows — purely so the review screen's "which column fed this field" UI has
+        // something coherent to show even though there was no literal spreadsheet column. See
+        // this interface method's doc comment for why there is no real header row / column
+        // mapping to detect for an AI-sourced document.
+        val fieldsPresent = rows.flatMap { it.fields.keys }.distinct()
+        val syntheticMapping = ColumnMappingResult(
+            fieldsPresent.mapIndexed { index, field -> ColumnMapping(columnIndex = index, header = field.labelAr, field = field) }
+        )
+
+        return PipelineAnalysisResult(
+            importType = importType,
+            headerRowIndex = null,
+            headers = fieldsPresent.map { it.labelAr },
+            columnMapping = syntheticMapping,
+            analyses = analyses,
+            skippedBlankRows = 0
+        )
+    }
+
+    /** Shared by [analyze] and [analyzeRows]: validate -> (skip matching if invalid/duplicate) ->
+     *  match -> report progress, for one already-parsed row list. This is deliberately the ONLY
+     *  place either public method calls [validator]/[productMatcher], so a spreadsheet row and an
+     *  AI-extracted row are judged by identical rules. */
+    private suspend fun runAnalyses(
+        rows: List<ParsedImportRow>,
+        duplicateOfByIndex: Map<Int, Int>,
+        onProgress: suspend (processed: Int, total: Int) -> Unit
+    ): List<RowAnalysis> {
+        val total = rows.size
+        return rows.mapIndexed { position, row ->
             val validation = validator.validate(row)
             val isDuplicate = duplicateOfByIndex.containsKey(position)
-            // A row that already failed validation, or is a same-file duplicate, is never sent
-            // to ProductMatcher — there is nothing useful to resolve it against yet, and it
-            // avoids spending a DB lookup on a row that cannot be accepted as-is anyway.
             val match = if (validation.isValid && !isDuplicate) productMatcher.match(row) else MatchResult.Unresolved
             onProgress(position + 1, total)
             RowAnalysis(
@@ -134,15 +220,6 @@ class DefaultImportPipeline @Inject constructor(
                 duplicateOfRowIndex = duplicateOfByIndex[position]
             )
         }
-
-        return PipelineAnalysisResult(
-            importType = importType,
-            headerRowIndex = headerResult?.headerRowIndex,
-            headers = headers,
-            columnMapping = mapping,
-            analyses = analyses,
-            skippedBlankRows = skippedBlank
-        )
     }
 
     /** Turns one raw data row into a [ParsedImportRow]: keeps the ORIGINAL header->value map
@@ -173,13 +250,7 @@ class DefaultImportPipeline @Inject constructor(
             if (fields[field]?.raw.isNullOrBlank()) fields[field] = normalized
         }
 
-        val quantity = when (importType) {
-            ImportType.INVENTORY -> fields[ImportField.CURRENT_STOCK]?.numeric
-            ImportType.COUNTING -> fields[ImportField.COUNTED_QUANTITY]?.numeric
-            ImportType.PURCHASE_REQUESTS -> fields[ImportField.REQUESTED_QUANTITY]?.numeric
-            ImportType.GOALS -> fields[ImportField.TARGET]?.numeric
-            ImportType.PRODUCTS, ImportType.SALES_INVOICES -> fields[ImportField.QUANTITY]?.numeric
-        }
+        val quantity = quantityFieldFor(importType, fields)
 
         return ParsedImportRow(
             importJobId = importJobId,

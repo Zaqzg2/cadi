@@ -2,6 +2,7 @@ package com.inventorysmartai.app.presentation.datacenter.importflow
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.inventorysmartai.app.data.importing.AiDocumentAnalysisEngine
 import com.inventorysmartai.app.data.importing.FileDetectionResult
 import com.inventorysmartai.app.data.importing.ImportEngine
 import com.inventorysmartai.app.data.importing.ImportProgress
@@ -12,9 +13,13 @@ import com.inventorysmartai.app.domain.importing.ImportReviewManager
 import com.inventorysmartai.app.domain.importing.ImportType
 import com.inventorysmartai.app.domain.importing.OpenedFile
 import com.inventorysmartai.app.domain.importing.RowDecision
+import com.inventorysmartai.app.domain.model.Attachment
+import com.inventorysmartai.app.domain.model.AttachmentOwnerType
 import com.inventorysmartai.app.domain.model.ImportRowStatus
 import com.inventorysmartai.app.domain.model.ImportSourceType
+import com.inventorysmartai.app.domain.repository.AttachmentRepository
 import com.inventorysmartai.app.domain.repository.CatalogRepository
+import com.inventorysmartai.app.domain.repository.DeviceSessionRepository
 import com.inventorysmartai.app.domain.repository.ImportRepository
 import com.inventorysmartai.app.domain.repository.PartyRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,26 +30,39 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Source types the AI extraction path handles — everything else still goes through
+ *  [ImportEngine]'s tabular CSV/Excel pipeline. See [ImportFlowViewModel.runAnalysis]. */
+private val AI_SOURCE_TYPES = setOf(ImportSourceType.PDF, ImportSourceType.IMAGE, ImportSourceType.CAMERA)
+
 /**
  * Drives every step of the spec's UX flow (section 24) from "اختر نوع البيانات" through
  * "اعتماد"/"تقرير النتيجة" — steps 1 (اختر الملف) and 3 (اختر الورقة) included. One instance is
  * shared across all the flow's screens via Hilt's nested-navigation-graph scoping (see
  * AppNavHost), so navigating between steps never loses state.
+ *
+ * Phase 4: also drives the AI-extraction path (PDF/photographed/scanned documents) via
+ * [AiDocumentAnalysisEngine] instead of [ImportEngine] — see [runAnalysis]. Every step AFTER
+ * analysis (mapping-screen skip aside — see [loadSheets]) is identical code for both paths, since
+ * both converge on the same [ImportProgress] states.
  */
 @HiltViewModel
 class ImportFlowViewModel @Inject constructor(
     private val importEngine: ImportEngine,
+    private val aiDocumentAnalysisEngine: AiDocumentAnalysisEngine,
     private val importRepository: ImportRepository,
     private val importReviewManager: ImportReviewManager,
     private val columnMapper: ColumnMapper,
     private val catalogRepository: CatalogRepository,
-    private val partyRepository: PartyRepository
+    private val partyRepository: PartyRepository,
+    private val attachmentRepository: AttachmentRepository,
+    private val deviceSessionRepository: DeviceSessionRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ImportFlowState())
     val state: StateFlow<ImportFlowState> = _state.asStateFlow()
 
     private var openedFile: OpenedFile? = null
+    private var pickedFileUriString: String? = null
     private var reviewObservationJob: Job? = null
 
     init {
@@ -68,6 +86,7 @@ class ImportFlowViewModel @Inject constructor(
 
     /** [uriString] is the content:// URI the SAF document picker returned, as a string. */
     fun onFilePicked(uriString: String) {
+        pickedFileUriString = uriString
         viewModelScope.launch {
             update { it.copy(isBusy = true, fileError = null, sheets = emptyList(), selectedSheet = null) }
 
@@ -88,7 +107,13 @@ class ImportFlowViewModel @Inject constructor(
                             fileError = null
                         )
                     }
-                    loadSheets(file, detection.sourceType)
+                    if (detection.sourceType in AI_SOURCE_TYPES) {
+                        // No sheet concept for a photographed/scanned document — go straight to
+                        // "ready to analyze", same as a single-sheet CSV would.
+                        update { it.copy(isBusy = false, sheets = listOf(null), selectedSheet = null) }
+                    } else {
+                        loadSheets(file, detection.sourceType)
+                    }
                 }
                 is FileDetectionResult.Empty ->
                     update { it.copy(isBusy = false, fileError = "الملف المحدد فارغ ولا يحتوي على بيانات") }
@@ -142,6 +167,27 @@ class ImportFlowViewModel @Inject constructor(
                 defaultSupplierId = current.selectedSupplierId
             )
             update { it.copy(jobId = jobId) }
+
+            if (sourceType in AI_SOURCE_TYPES) {
+                // Phase 4 file traceability: the review screen can look this up later via
+                // attachmentRepository.observeAttachments(IMPORT_JOB, jobId) to let the user open
+                // the original photographed/scanned document (spec's FILE TRACEABILITY section).
+                pickedFileUriString?.let { uri ->
+                    runCatching {
+                        attachmentRepository.addAttachment(
+                            Attachment(
+                                ownerType = AttachmentOwnerType.IMPORT_JOB,
+                                ownerId = jobId,
+                                fileName = current.pickedFileName ?: "مستند",
+                                filePath = uri,
+                                mimeType = current.pickedFileMime,
+                                createdAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                }
+            }
+
             runAnalysis(file, sourceType, importType, jobId, mappingOverride = null)
         }
     }
@@ -153,7 +199,18 @@ class ImportFlowViewModel @Inject constructor(
         jobId: Long,
         mappingOverride: ColumnMappingResult?
     ) {
-        importEngine.analyze(file, sourceType, _state.value.selectedSheet, importType, jobId, mappingOverride).collect { progress ->
+        val progressFlow = if (sourceType in AI_SOURCE_TYPES) {
+            val sessionId = deviceSessionRepository.getSessionId()
+            val bytes = runCatching { file.inputStream().use { it.readBytes() } }.getOrElse { e ->
+                update { it.copy(isBusy = false, analysisError = "تعذّر قراءة الملف: ${e.message ?: e.javaClass.simpleName}") }
+                return
+            }
+            aiDocumentAnalysisEngine.analyzeDocument(bytes, file.mimeType ?: "application/octet-stream", importType, jobId, sessionId)
+        } else {
+            importEngine.analyze(file, sourceType, _state.value.selectedSheet, importType, jobId, mappingOverride)
+        }
+
+        progressFlow.collect { progress ->
             when (progress) {
                 is ImportProgress.Stage -> update { it.copy(stageLabel = progress.labelAr) }
                 is ImportProgress.Analyzing -> update { it.copy(analyzedProcessed = progress.processed, analyzedTotal = progress.total) }
@@ -163,6 +220,11 @@ class ImportFlowViewModel @Inject constructor(
                         // First pass only: seed the mapping screen with the auto-suggestion and
                         // check for a matching saved template. A re-analysis after the user
                         // edited the mapping (confirmColumnMappingAndReanalyze) keeps their edits.
+                        // For an AI-sourced job this "mapping" is the synthetic identity mapping
+                        // ImportPipeline.analyzeRows built (one entry per field Gemini actually
+                        // returned) — harmless to show on the mapping screen as-is, though a
+                        // dedicated "this was AI-extracted, here's what was found" presentation
+                        // would read better; left as a follow-up (see README's Known limitations).
                         val template = runCatching {
                             importRepository.findBestMatchingTemplate(importType, progress.result.headers)
                         }.getOrNull()

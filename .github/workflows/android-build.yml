@@ -34,7 +34,9 @@ jobs:
         run: gradle wrapper --gradle-version 8.14.4 --distribution-type bin
 
       # Phase 3 spec section 27: "./gradlew test" before "./gradlew assembleDebug". Runs first so
-      # a broken pipeline test fails fast without waiting for a full APK assembly.
+      # a broken pipeline test fails fast without waiting for a full APK assembly. Since Phase 4
+      # added the :backend module to settings.gradle.kts, this same bare "./gradlew test" (no
+      # module qualifier) now also runs :backend's JUnit tests — nothing else needed for that part.
       - name: Run unit tests
         id: unit_tests
         run: |
@@ -50,17 +52,31 @@ jobs:
           ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build-output.log
         continue-on-error: true
 
+      # Phase 4: builds the backend's full Ktor application distribution (a plain JVM jar, not an
+      # Android artifact) - confirms it assembles end to end, beyond what running its unit tests
+      # alone verifies. Needs no secrets (GEMINI_API_KEY etc.) - AppConfig only reads them lazily,
+      # the first time a real request comes in, never at build/compile time - see backend/README.md.
+      - name: Build backend
+        id: build_backend
+        if: steps.unit_tests.outcome == 'success'
+        run: |
+          set -o pipefail
+          ./gradlew :backend:build --stacktrace 2>&1 | tee backend-build-output.log
+        continue-on-error: true
+
       - name: Collect failure logs
-        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure'
+        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure' || steps.build_backend.outcome == 'failure'
         run: |
           mkdir -p ci-failure-logs
           cp unit-test-output.log ci-failure-logs/ 2>/dev/null || true
           cp build-output.log ci-failure-logs/ 2>/dev/null || true
+          cp backend-build-output.log ci-failure-logs/ 2>/dev/null || true
           [ -d app/build/reports ] && cp -r app/build/reports ci-failure-logs/app-build-reports
+          [ -d backend/build/reports ] && cp -r backend/build/reports ci-failure-logs/backend-build-reports
           exit 0
 
       - name: Upload failure logs
-        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure'
+        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure' || steps.build_backend.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ci-failure-logs
@@ -68,7 +84,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Fail job if tests or build failed
-        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure'
+        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure' || steps.build_backend.outcome == 'failure'
         run: exit 1
 
       - name: Upload APK

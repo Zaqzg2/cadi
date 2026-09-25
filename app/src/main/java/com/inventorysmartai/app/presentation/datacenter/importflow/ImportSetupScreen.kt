@@ -32,6 +32,7 @@ import androidx.navigation.NavController
 import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 import com.inventorysmartai.app.domain.importing.ImportType
+import com.inventorysmartai.app.domain.model.ImportSourceType
 import com.inventorysmartai.app.navigation.Destination
 
 private val IMPORT_TYPE_MIME_TYPES = arrayOf(
@@ -41,6 +42,10 @@ private val IMPORT_TYPE_MIME_TYPES = arrayOf(
     "text/plain",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-excel",
+    // --- Phase 4: AI-extracted documents (invoices, purchase requests, handwritten notes, ...) ---
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
     "application/octet-stream"
 )
 
@@ -134,8 +139,15 @@ fun ImportSetupScreen(navController: NavController, viewModel: ImportFlowViewMod
                         if (state.fileError != null) {
                             Text(state.fileError.orEmpty(), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                         }
+                        if (state.detectedSourceType == ImportSourceType.PDF || state.detectedSourceType == ImportSourceType.IMAGE) {
+                            Text(
+                                "سيتم تحليل هذا المستند بالذكاء الاصطناعي — راجع البيانات المستخرجة بعناية قبل الاعتماد.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Button(onClick = { filePickerLauncher.launch(IMPORT_TYPE_MIME_TYPES) }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (state.pickedFileName == null) "اختر الملف (Excel أو CSV)" else "اختيار ملف آخر")
+                            Text(if (state.pickedFileName == null) "اختر ملفًا (Excel، CSV، PDF، أو صورة)" else "اختيار ملف آخر")
                         }
                     }
                 }
@@ -166,8 +178,9 @@ private val importTypeOptions = listOf(
     ImportType.INVENTORY to "الجرد / المخزون",
     ImportType.COUNTING to "الجرد الفعلي",
     ImportType.PURCHASE_REQUESTS to "طلبات الشراء",
-    ImportType.GOALS to "الأهداف"
+    ImportType.GOALS to "الأهداف",
+    ImportType.SALES_INVOICES to "فاتورة مبيعات"
 )
 
 private fun needsBranch(type: ImportType?): Boolean =
-    type == ImportType.INVENTORY || type == ImportType.COUNTING || type == ImportType.PURCHASE_REQUESTS
+    type == ImportType.INVENTORY || type == ImportType.COUNTING || type == ImportType.PURCHASE_REQUESTS || type == ImportType.SALES_INVOICES

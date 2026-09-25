@@ -1,5 +1,12 @@
 package com.inventorysmartai.app.di
 
+import com.inventorysmartai.app.data.assistant.AssistantRepositoryImpl
+import com.inventorysmartai.app.data.assistant.DefaultLocalToolExecutor
+import com.inventorysmartai.app.data.google.DeviceSessionRepositoryImpl
+import com.inventorysmartai.app.data.google.GoogleAuthRepositoryImpl
+import com.inventorysmartai.app.data.google.GoogleServiceStatusRepositoryImpl
+import com.inventorysmartai.app.data.google.GoogleWorkspaceRepositoryImpl
+import com.inventorysmartai.app.data.importing.AiDocumentImportRepositoryImpl
 import com.inventorysmartai.app.data.importing.AndroidContentImportSource
 import com.inventorysmartai.app.data.importing.DefaultImportEngine
 import com.inventorysmartai.app.data.importing.DefaultImportReviewManager
@@ -16,6 +23,7 @@ import com.inventorysmartai.app.data.repository.PurchaseRepositoryImpl
 import com.inventorysmartai.app.data.repository.ReportsRepositoryImpl
 import com.inventorysmartai.app.data.repository.SalesRepositoryImpl
 import com.inventorysmartai.app.data.repository.SettingsRepositoryImpl
+import com.inventorysmartai.app.domain.assistant.LocalToolExecutor
 import com.inventorysmartai.app.domain.importing.ColumnMapper
 import com.inventorysmartai.app.domain.importing.DefaultColumnMapper
 import com.inventorysmartai.app.domain.importing.DefaultDuplicateDetector
@@ -29,10 +37,16 @@ import com.inventorysmartai.app.domain.importing.ImportSource
 import com.inventorysmartai.app.domain.importing.ImportValidator
 import com.inventorysmartai.app.domain.importing.Normalizer
 import com.inventorysmartai.app.domain.importing.ProductMatcher
+import com.inventorysmartai.app.domain.repository.AiDocumentImportRepository
+import com.inventorysmartai.app.domain.repository.AssistantRepository
 import com.inventorysmartai.app.domain.repository.AttachmentRepository
 import com.inventorysmartai.app.domain.repository.CatalogRepository
 import com.inventorysmartai.app.domain.repository.CountingRepository
+import com.inventorysmartai.app.domain.repository.DeviceSessionRepository
 import com.inventorysmartai.app.domain.repository.GoalRepository
+import com.inventorysmartai.app.domain.repository.GoogleAuthRepository
+import com.inventorysmartai.app.domain.repository.GoogleServiceStatusRepository
+import com.inventorysmartai.app.domain.repository.GoogleWorkspaceRepository
 import com.inventorysmartai.app.domain.repository.ImportRepository
 import com.inventorysmartai.app.domain.repository.PartyRepository
 import com.inventorysmartai.app.domain.repository.ProductRepository
@@ -71,4 +85,13 @@ abstract class RepositoryModule {
     @Binds @Singleton abstract fun bindDuplicateDetector(impl: DefaultDuplicateDetector): DuplicateDetector
     @Binds @Singleton abstract fun bindImportPipeline(impl: DefaultImportPipeline): ImportPipeline
     @Binds @Singleton abstract fun bindImportReviewManager(impl: DefaultImportReviewManager): ImportReviewManager
+
+    // --- Phase 4: AI + Google ecosystem ---
+    @Binds @Singleton abstract fun bindAssistantRepository(impl: AssistantRepositoryImpl): AssistantRepository
+    @Binds @Singleton abstract fun bindLocalToolExecutor(impl: DefaultLocalToolExecutor): LocalToolExecutor
+    @Binds @Singleton abstract fun bindAiDocumentImportRepository(impl: AiDocumentImportRepositoryImpl): AiDocumentImportRepository
+    @Binds @Singleton abstract fun bindDeviceSessionRepository(impl: DeviceSessionRepositoryImpl): DeviceSessionRepository
+    @Binds @Singleton abstract fun bindGoogleAuthRepository(impl: GoogleAuthRepositoryImpl): GoogleAuthRepository
+    @Binds @Singleton abstract fun bindGoogleWorkspaceRepository(impl: GoogleWorkspaceRepositoryImpl): GoogleWorkspaceRepository
+    @Binds @Singleton abstract fun bindGoogleServiceStatusRepository(impl: GoogleServiceStatusRepositoryImpl): GoogleServiceStatusRepository
 }

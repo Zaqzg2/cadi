@@ -52,9 +52,12 @@ import com.inventorysmartai.app.data.local.database.entity.UnitEntity
  * plus this one new table. version 3 (Phase 3): import_jobs/import_rows gained the columns the
  * real Excel/CSV pipeline needs (importType, sheetName, branch/supplier context, error codes,
  * warnings — see ImportEntities.kt) plus one new table, import_mapping_templates (spec section
- * 20). Still relying on fallbackToDestructiveMigration (see DatabaseModule) since no production
- * install exists yet to preserve — replace with real Migration objects before the first real
- * release.
+ * 20). version 4 (Phase 4): import_jobs gained sourceAttachmentId + metadataJson (AI-document
+ * traceability and document-header fields) and attachments gained driveFileId/driveWebViewLink
+ * (Drive backup linkage) — see SupportModels.kt's ImportJob/Attachment doc comments. No new
+ * tables this phase. Still relying on fallbackToDestructiveMigration (see DatabaseModule) since
+ * no production install exists yet to preserve — replace with real Migration objects before the
+ * first real release.
  */
 @Database(
     entities = [
@@ -71,7 +74,7 @@ import com.inventorysmartai.app.data.local.database.entity.UnitEntity
         ImportJobEntity::class, ImportRowEntity::class, ImportMappingTemplateEntity::class,
         AuditLogEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class InventorySmartDatabase : RoomDatabase() {

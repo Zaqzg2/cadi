@@ -58,6 +58,10 @@ class DefaultImportValidator @Inject constructor() : ImportValidator {
             }
         }
 
-        return ValidationResult(isValid = errors.isEmpty(), errors = errors, warnings = warnings)
+        return ValidationResult(
+            isValid = errors.isEmpty(),
+            errors = errors,
+            warnings = warnings + row.sourceWarnings.map { RowIssue(ImportErrorCode.AI_LOW_CONFIDENCE, it) }
+        )
     }
 }

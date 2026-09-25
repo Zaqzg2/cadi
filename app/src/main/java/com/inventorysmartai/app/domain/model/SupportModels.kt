@@ -9,7 +9,13 @@ data class Attachment(
     val fileName: String,
     val filePath: String,
     val mimeType: String? = null,
-    val createdAt: Long
+    val createdAt: Long,
+    // --- Phase 4 additions ---
+    /** Set once this attachment has been uploaded to the app's Drive folder (see
+     *  google/GoogleWorkspaceRepositoryImpl). Null until then — an attachment is always usable
+     *  locally (filePath) whether or not it has ever been backed up to Drive. */
+    val driveFileId: String? = null,
+    val driveWebViewLink: String? = null
 )
 
 data class ImportJob(
@@ -42,7 +48,21 @@ data class ImportJob(
     val mimeType: String? = null,
     /** Rows the human explicitly rejected/ignored during review — kept distinct from errorRows
      *  (a rejected row need not have failed validation) for an honest "تقرير النتيجة". */
-    val rejectedRows: Int? = null
+    val rejectedRows: Int? = null,
+    // --- Phase 4 additions ---
+    /** The photographed/scanned document this job was extracted from, when [sourceType] is
+     *  PDF/IMAGE/CAMERA — lets the review screen open the original source (spec's FILE
+     *  TRACEABILITY: "the user should be able to open the original source document from the
+     *  review screen"). Null for a plain CSV/Excel import, which has no separate attachment. */
+    val sourceAttachmentId: Long? = null,
+    /** Document-level fields Gemini extracted that apply to the whole document rather than one
+     *  row — an invoice's number/date/customer/branch/warehouse/currency/previousBalance/
+     *  invoiceTotal/finalBalance, or a purchase request's requester/date. Raw JSON object of
+     *  field name -> extracted value; never run through [ImportField]/Normalizer (these aren't
+     *  per-row columns), shown as-is on the review screen and consumed directly by
+     *  ImportRepositoryImpl.approveSalesInvoices. Null for every non-AI import and for AI imports
+     *  with no document-level fields (PRODUCTS/INVENTORY/COUNTING/GOALS). */
+    val metadataJson: String? = null
 )
 
 data class ImportRow(

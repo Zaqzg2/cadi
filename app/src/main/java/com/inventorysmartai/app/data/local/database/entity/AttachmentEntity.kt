@@ -14,5 +14,8 @@ data class AttachmentEntity(
     val fileName: String,
     val filePath: String,
     val mimeType: String? = null,
-    val createdAt: Long
+    val createdAt: Long,
+    // --- Phase 4 additions ---
+    val driveFileId: String? = null,
+    val driveWebViewLink: String? = null
 )

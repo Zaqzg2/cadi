@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- One JSON object per line for AUDIT — see audit/AuditLog.kt. Kept on its own appender so
+         it can be piped to a log aggregator / file separately from ordinary request logs without
+         any code change. -->
+    <appender name="AUDIT_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="AUDIT" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_STDOUT" />
+    </logger>
+
+    <!-- Ktor's own request logging (CallLogging plugin) — kept at INFO; set to DEBUG locally for
+         more verbose troubleshooting. -->
+    <logger name="io.ktor" level="INFO" />
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT" />
+    </root>
+</configuration>

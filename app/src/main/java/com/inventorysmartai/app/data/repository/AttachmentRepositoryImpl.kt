@@ -18,6 +18,8 @@ class AttachmentRepositoryImpl @Inject constructor(
     override fun observeAttachments(ownerType: AttachmentOwnerType, ownerId: Long): Flow<List<Attachment>> =
         attachmentDao.observeFor(ownerType.name, ownerId).map { list -> list.map { it.toDomain() } }
 
+    override suspend fun getAttachment(id: Long): Attachment? = attachmentDao.getById(id)?.toDomain()
+
     override suspend fun addAttachment(attachment: Attachment): Long =
         attachmentDao.insert(
             AttachmentEntity(
@@ -26,11 +28,16 @@ class AttachmentRepositoryImpl @Inject constructor(
                 fileName = attachment.fileName,
                 filePath = attachment.filePath,
                 mimeType = attachment.mimeType,
-                createdAt = attachment.createdAt
+                createdAt = attachment.createdAt,
+                driveFileId = attachment.driveFileId,
+                driveWebViewLink = attachment.driveWebViewLink
             )
         )
 
     override suspend fun deleteAttachment(id: Long) = attachmentDao.deleteById(id)
+
+    override suspend fun updateDriveInfo(id: Long, driveFileId: String, driveWebViewLink: String?) =
+        attachmentDao.updateDriveInfo(id, driveFileId, driveWebViewLink)
 }
 
 private fun AttachmentEntity.toDomain() = Attachment(
@@ -40,5 +47,7 @@ private fun AttachmentEntity.toDomain() = Attachment(
     fileName = fileName,
     filePath = filePath,
     mimeType = mimeType,
-    createdAt = createdAt
+    createdAt = createdAt,
+    driveFileId = driveFileId,
+    driveWebViewLink = driveWebViewLink
 )

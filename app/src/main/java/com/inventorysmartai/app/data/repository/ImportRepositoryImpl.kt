@@ -42,11 +42,15 @@ import com.inventorysmartai.app.domain.model.ImportJobStatus
 import com.inventorysmartai.app.domain.model.ImportRow
 import com.inventorysmartai.app.domain.model.ImportRowStatus
 import com.inventorysmartai.app.domain.model.ImportSourceType
+import com.inventorysmartai.app.domain.model.InvoiceStatus
 import com.inventorysmartai.app.domain.model.MovementType
 import com.inventorysmartai.app.domain.model.PurchaseStatus
+import com.inventorysmartai.app.domain.model.SalesInvoice
+import com.inventorysmartai.app.domain.model.SalesInvoiceItem
 import com.inventorysmartai.app.domain.model.aggregateImportRowCounts
 import com.inventorysmartai.app.domain.repository.ImportApprovalResult
 import com.inventorysmartai.app.domain.repository.ImportRepository
+import com.inventorysmartai.app.domain.repository.SalesRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.Calendar
@@ -71,7 +75,8 @@ class ImportRepositoryImpl @Inject constructor(
     private val inventoryMovementDao: InventoryMovementDao,
     private val countingDao: CountingDao,
     private val purchaseDao: PurchaseDao,
-    private val goalDao: GoalDao
+    private val goalDao: GoalDao,
+    private val salesRepository: SalesRepository
 ) : ImportRepository {
 
     // ---------------------------------------------------------------------------------------
@@ -127,7 +132,8 @@ class ImportRepositoryImpl @Inject constructor(
         importType: ImportType,
         sheetName: String?,
         defaultBranchId: Long?,
-        defaultSupplierId: Long?
+        defaultSupplierId: Long?,
+        sourceAttachmentId: Long?
     ): Long {
         val now = System.currentTimeMillis()
         return importDao.insertJob(
@@ -142,9 +148,14 @@ class ImportRepositoryImpl @Inject constructor(
                 defaultBranchId = defaultBranchId,
                 defaultSupplierId = defaultSupplierId,
                 fileSizeBytes = fileSizeBytes,
-                mimeType = mimeType
+                mimeType = mimeType,
+                sourceAttachmentId = sourceAttachmentId
             )
         )
+    }
+
+    override suspend fun updateJobMetadata(jobId: Long, metadataJson: String?) {
+        importDao.updateJobMetadata(jobId, metadataJson)
     }
 
     override suspend fun persistAnalysis(jobId: Long, analysis: PipelineAnalysisResult) {
@@ -221,8 +232,7 @@ class ImportRepositoryImpl @Inject constructor(
                     ImportType.COUNTING -> approveCounting(jobEntity, acceptedRows, now)
                     ImportType.PURCHASE_REQUESTS -> approvePurchaseRequests(jobEntity, acceptedRows, now)
                     ImportType.GOALS -> approveGoals(acceptedRows, now)
-                    ImportType.SALES_INVOICES ->
-                        error("استيراد فواتير المبيعات لا يحتوي بعد على منطق اعتماد متخصص في هذه المرحلة")
+                    ImportType.SALES_INVOICES -> approveSalesInvoices(jobEntity, acceptedRows, now)
                 }
             }
             val rejected = allRows.size - acceptedRows.size
@@ -395,6 +405,18 @@ class ImportRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Phase 3 treated one row as one product with exactly one commission group. Phase 4's AI
+     * extraction can legitimately emit *several* rows for the same product — one per target-tier
+     * column the source sheet had (see backend gemini/ExtractionSchemas.kt's GOALS schema doc:
+     * "do not assume a fixed number of groups") — carrying the tier in [ImportField.TARGET_GROUP]
+     * and that tier's own commission in [ImportField.COMMISSION_VALUE]. So rows are grouped by
+     * their resolved product first, and every row in a group becomes one [CommissionEntity] under
+     * one [GoalEntity], in the order the rows appeared (falling back to that order — 1, 2, 3... —
+     * when a row has no explicit [ImportField.TARGET_GROUP] text, e.g. a plain Phase 3 Excel row).
+     * A plain single-row-per-product file (Phase 3's case) is just the N=1 special case of this
+     * same logic — no behavior change for it.
+     */
     private suspend fun approveGoals(rows: List<ImportRowEntity>, now: Long) {
         // The spec's GOALS section requires only "product identification, target" — no period
         // column at all — so a one-calendar-month period starting now is a deliberate, documented
@@ -402,29 +424,128 @@ class ImportRepositoryImpl @Inject constructor(
         val periodStart = startOfCurrentMonth(now)
         val periodEnd = endOfCurrentMonth(now)
 
+        data class TierRow(val fields: Map<String, String>, val target: Double, val commission: Double, val groupLabel: String?)
+
+        val byProduct = LinkedHashMap<Long, MutableList<TierRow>>()
         rows.forEach { entity ->
             val fields = SimpleJson.decodeMap(entity.normalizedData)
             val productId = resolveOrCreateProductId(entity, fields, now, updateMasterFieldsIfMatched = false)
             val target = fields[ImportField.TARGET.name]?.toDoubleOrNull()
                 ?: error("قيمة \"${ImportField.TARGET.labelAr}\" مفقودة أو غير صالحة لأحد الصفوف")
+            val commission = fields[ImportField.COMMISSION_VALUE.name]?.toDoubleOrNull() ?: 0.0
+            val groupLabel = fields[ImportField.TARGET_GROUP.name]
+            byProduct.getOrPut(productId) { mutableListOf() } += TierRow(fields, target, commission, groupLabel)
+        }
 
+        byProduct.forEach { (productId, tiers) ->
             val goalId = goalDao.upsertGoal(
                 GoalEntity(productId = productId, periodStart = periodStart, periodEnd = periodEnd, createdAt = now, updatedAt = now)
             )
             goalDao.insertCommissions(
-                listOf(
+                tiers.mapIndexed { index, tier ->
                     CommissionEntity(
                         goalId = goalId,
-                        groupOrder = 1,
-                        targetQuantity = target,
+                        groupOrder = index + 1,
+                        targetQuantity = tier.target,
                         commissionType = CommissionType.PERCENTAGE.name,
-                        commissionValue = 0.0,
+                        commissionValue = tier.commission,
                         createdAt = now,
                         updatedAt = now
                     )
-                )
+                }
             )
         }
+    }
+
+    /**
+     * Phase 4: an AI-extracted sales invoice. One import job == one invoice (the natural
+     * extraction unit — one photographed/PDF invoice), so unlike PURCHASE_REQUESTS/COUNTING there
+     * is no per-branch grouping here; every accepted row is one line item of the SAME invoice.
+     * Header-level facts (invoice number/date/customer/branch/warehouse/currency/previousBalance/
+     * invoiceTotal) live in [ImportJobEntity.metadataJson] — see that field's doc comment — never
+     * in the per-row fields. Delegates the actual write to [SalesRepository.saveInvoice] rather
+     * than touching sales tables directly, so the exact same stock-validation and
+     * inventory-movement logic used for a manually-entered invoice applies here too (spec:
+     * "reuse... don't rebuild the established architecture").
+     */
+    private suspend fun approveSalesInvoices(job: ImportJobEntity, rows: List<ImportRowEntity>, now: Long) {
+        val header = SimpleJson.decodeMap(job.metadataJson)
+
+        val branchId = header["BRANCH"]?.let { findOrCreateBranchId(it, now) }
+            ?: job.defaultBranchId
+            ?: error("تعذّر تحديد الفرع لفاتورة المبيعات — يرجى اختيار فرع افتراضي قبل التحليل")
+
+        val items = rows.map { entity ->
+            val fields = SimpleJson.decodeMap(entity.normalizedData)
+            val productId = resolveOrCreateProductId(entity, fields, now, updateMasterFieldsIfMatched = false)
+            val quantity = fields[ImportField.QUANTITY.name]?.toDoubleOrNull()
+                ?: error("قيمة \"${ImportField.QUANTITY.labelAr}\" مفقودة أو غير صالحة لأحد بنود الفاتورة")
+            val unitPrice = fields[ImportField.UNIT_PRICE.name]?.toDoubleOrNull() ?: 0.0
+            val discountPercent = fields[ImportField.DISCOUNT_PERCENT.name]?.toDoubleOrNull() ?: 0.0
+            SalesInvoiceItem(
+                productId = productId,
+                productName = fields[ImportField.PRODUCT_NAME.name],
+                itemNumberSnapshot = fields[ImportField.ITEM_NUMBER.name],
+                itemNameSnapshot = fields[ImportField.PRODUCT_NAME.name],
+                unitSnapshot = fields[ImportField.UNIT.name],
+                quantity = quantity,
+                unitPrice = unitPrice,
+                discountPercent = discountPercent
+            )
+        }
+
+        val invoice = SalesInvoice(
+            invoiceNumber = header["INVOICE_NUMBER"]?.takeIf { it.isNotBlank() } ?: "AI-${job.id}-$now",
+            invoiceDate = header["INVOICE_DATE"]?.let { parseFlexibleDate(it) } ?: now,
+            // AI-extracted customer text is kept for display only — matching it against (or
+            // creating) a formal Customer record is a fuzzy-matching problem of its own,
+            // deliberately out of scope for this pass (see README's Known limitations).
+            customerId = null,
+            customerName = header["CUSTOMER_NAME"],
+            branchId = branchId,
+            warehouse = header["WAREHOUSE"],
+            currency = header["CURRENCY"].orEmpty(),
+            previousBalance = header["PREVIOUS_BALANCE"]?.toDoubleOrNull(),
+            notes = importNote(job),
+            status = InvoiceStatus.CONFIRMED,
+            items = items
+        )
+
+        // Deterministic cross-check (spec: "invoice total should be checked against line totals
+        // where possible") — a >1% mismatch between what the document *said* the total was and
+        // what the line items actually add up to means either a misread line or a misread total;
+        // either way this is not safe to silently save, so it rolls back the whole job (the same
+        // "throw inside the transaction" idiom used by resolveBranchId above) rather than saving
+        // a number that contradicts its own line items.
+        header["INVOICE_TOTAL"]?.toDoubleOrNull()?.let { statedTotal ->
+            val computedTotal = invoice.total
+            val tolerance = maxOf(0.01 * kotlin.math.abs(statedTotal), 0.01)
+            if (kotlin.math.abs(statedTotal - computedTotal) > tolerance) {
+                error(
+                    "إجمالي الفاتورة المستخرج ($statedTotal) لا يتطابق مع مجموع بنود الفاتورة " +
+                        "المحسوب ($computedTotal) — يرجى مراجعة الكميات والأسعار في شاشة المراجعة قبل الاعتماد"
+                )
+            }
+        }
+
+        salesRepository.saveInvoice(invoice)
+    }
+
+    /** Very small, deliberately forgiving date parser for AI-extracted date text (which can come
+     *  back as "2026-09-01", "01/09/2026", or similar) — falls back to "now" rather than throwing,
+     *  since an approximate invoice date is far less harmful than blocking approval over date
+     *  formatting, unlike the quantity/price/branch fields above which do throw. */
+    private fun parseFlexibleDate(raw: String): Long {
+        val patterns = listOf("yyyy-MM-dd", "dd/MM/yyyy", "yyyy/MM/dd", "dd-MM-yyyy")
+        for (pattern in patterns) {
+            val parsed = runCatching {
+                val format = java.text.SimpleDateFormat(pattern, java.util.Locale.US)
+                format.isLenient = false
+                format.parse(raw.trim())?.time
+            }.getOrNull()
+            if (parsed != null) return parsed
+        }
+        return System.currentTimeMillis()
     }
 
     // ---------------------------------------------------------------------------------------

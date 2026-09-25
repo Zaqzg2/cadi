@@ -93,8 +93,12 @@ interface SettingsRepository {
 
 interface AttachmentRepository {
     fun observeAttachments(ownerType: AttachmentOwnerType, ownerId: Long): Flow<List<Attachment>>
+    suspend fun getAttachment(id: Long): Attachment?
     suspend fun addAttachment(attachment: Attachment): Long
     suspend fun deleteAttachment(id: Long)
+    /** Phase 4: records that [id] has been backed up to the app's Drive folder — see
+     *  google/GoogleWorkspaceRepositoryImpl. */
+    suspend fun updateDriveInfo(id: Long, driveFileId: String, driveWebViewLink: String?)
 }
 
 /**
@@ -113,7 +117,9 @@ interface ImportRepository {
     suspend fun finalizeJob(jobId: Long, rows: List<ImportRow>)
 
     /** Creates a job for the real EXCEL/CSV pipeline, carrying the extra context the spec's
-     *  "اختر نوع البيانات" step gathers before analysis even starts. */
+     *  "اختر نوع البيانات" step gathers before analysis even starts. [sourceAttachmentId] is set
+     *  (Phase 4) when the job's source is a photographed/scanned document already saved as an
+     *  [Attachment] — null for a plain CSV/Excel pick, which has no separate attachment record. */
     suspend fun startImportJob(
         sourceType: ImportSourceType,
         fileName: String?,
@@ -122,8 +128,17 @@ interface ImportRepository {
         importType: ImportType,
         sheetName: String?,
         defaultBranchId: Long?,
-        defaultSupplierId: Long?
+        defaultSupplierId: Long?,
+        sourceAttachmentId: Long? = null
     ): Long
+
+    /** Phase 4: records document-level fields Gemini extracted (an invoice's number/date/
+     *  customer/..., a purchase request's requester/date) — see [ImportJob.metadataJson]'s doc
+     *  comment for exactly what this carries and why it is separate from the per-row fields. A
+     *  new method rather than another [persistAnalysis] parameter since it is set at a different
+     *  point in the AI flow (after extraction, alongside/after persisting rows) and no tabular
+     *  (CSV/Excel) import ever calls it. */
+    suspend fun updateJobMetadata(jobId: Long, metadataJson: String?)
 
     /** Persists one [PipelineAnalysisResult] as pending [ImportRow]s and moves the job to
      *  REVIEW_REQUIRED — this is what the Review screen (backed by

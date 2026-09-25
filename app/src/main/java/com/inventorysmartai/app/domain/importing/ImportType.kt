@@ -2,11 +2,12 @@ package com.inventorysmartai.app.domain.importing
 
 /**
  * The kinds of bulk import the same pipeline (File → ... → Database, see ImportPipeline)
- * supports. PRODUCTS/INVENTORY/COUNTING/PURCHASE_REQUESTS/GOALS are fully implemented this
- * phase; SALES_INVOICES has the enum value and pipeline plumbing so it type-checks end to end,
- * but [ImportType.requiredFields] intentionally has no invoice-line-specific fields yet and
- * [com.inventorysmartai.app.data.repository.ImportRepositoryImpl] rejects approval for it —
- * "infrastructure but not advanced invoice-specific parsing yet", per the spec.
+ * supports. PRODUCTS/INVENTORY/COUNTING/PURCHASE_REQUESTS/GOALS have been fully implemented since
+ * Phase 3. SALES_INVOICES gained real approval logic in Phase 4 (see
+ * [com.inventorysmartai.app.data.repository.ImportRepositoryImpl.approveSalesInvoices]) — Phase 3
+ * left it with the enum value and pipeline plumbing only ("infrastructure but not advanced
+ * invoice-specific parsing yet"); Gemini's document understanding (see the backend module's
+ * gemini/ExtractionSchemas.kt) is exactly that "advanced invoice-specific parsing".
  */
 enum class ImportType(val labelAr: String) {
     PRODUCTS("الأصناف"),
@@ -27,7 +28,7 @@ enum class ImportType(val labelAr: String) {
             COUNTING -> setOf(ImportField.COUNTED_QUANTITY)
             PURCHASE_REQUESTS -> setOf(ImportField.REQUESTED_QUANTITY)
             GOALS -> setOf(ImportField.TARGET)
-            SALES_INVOICES -> emptySet()
+            SALES_INVOICES -> setOf(ImportField.QUANTITY)
         }
 
     /** Fields this type will recognize/use if present in the file, beyond the identification
@@ -43,8 +44,8 @@ enum class ImportType(val labelAr: String) {
             INVENTORY -> setOf(ImportField.BRANCH, ImportField.NOTES)
             COUNTING -> setOf(ImportField.BRANCH, ImportField.CURRENT_STOCK, ImportField.NOTES)
             PURCHASE_REQUESTS -> setOf(ImportField.BRANCH, ImportField.CURRENT_STOCK, ImportField.NOTES)
-            GOALS -> setOf(ImportField.NOTES)
-            SALES_INVOICES -> setOf(ImportField.BRANCH, ImportField.QUANTITY, ImportField.NOTES)
+            GOALS -> setOf(ImportField.NOTES, ImportField.TARGET_GROUP, ImportField.COMMISSION_VALUE)
+            SALES_INVOICES -> setOf(ImportField.BRANCH, ImportField.UNIT, ImportField.UNIT_PRICE, ImportField.DISCOUNT_PERCENT, ImportField.NOTES)
         }
 
     /** Every field this type's column-mapping screen should offer, in a sensible order. */

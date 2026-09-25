@@ -15,6 +15,7 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.inventorysmartai.app.presentation.assistant.AiAssistantScreen
+import com.inventorysmartai.app.presentation.settings.googleservices.GoogleServicesStatusScreen
 import com.inventorysmartai.app.presentation.counting.detail.CountingDetailScreen
 import com.inventorysmartai.app.presentation.counting.list.CountingListScreen
 import com.inventorysmartai.app.presentation.datacenter.DataCenterScreen
@@ -147,6 +148,7 @@ fun AppNavHost() {
                 arguments = listOf(navArgument(Destination.SettingsCatalog.ARG_TYPE) { type = NavType.StringType })
             ) { CatalogListScreen(navController) }
             composable(Destination.SettingsInventory.route) { InventorySettingsScreen(navController) }
+            composable(Destination.GoogleServicesStatus.route) { GoogleServicesStatusScreen(navController) }
             composable(
                 Destination.SettingsPlaceholder.route,
                 arguments = listOf(navArgument(Destination.SettingsPlaceholder.ARG_KEY) { type = NavType.StringType })

@@ -27,6 +27,18 @@ enum class ImportField(val labelAr: String, val isNumeric: Boolean = false) {
     COUNTED_QUANTITY("الكمية المجرودة (الفعلية)", isNumeric = true),
     TARGET("الهدف (المستهدف)", isNumeric = true),
     NOTES("ملاحظات"),
+    // --- Phase 4 additions: AI-extracted sales invoice lines and goal/commission tiers. Added at
+    // the end, additive-only — nothing above was renumbered or renamed, so no existing dictionary
+    // entry, when(...) branch, or persisted ImportRowEntity JSON referencing an older field name
+    // is affected (see domain/importing/ImportField.kt's own file-level doc for why this enum is
+    // deliberately flat and append-only).
+    UNIT_PRICE("سعر الوحدة", isNumeric = true),
+    DISCOUNT_PERCENT("نسبة الخصم", isNumeric = true),
+    /** One row = one (product, tier) pair for a goals/commission sheet with any number of target
+     *  groups — see gemini/ExtractionSchemas.kt (backend) and ImportRepositoryImpl.approveGoals
+     *  for how rows sharing a product are grouped back into one Goal with N CommissionGroups. */
+    TARGET_GROUP("مجموعة الهدف"),
+    COMMISSION_VALUE("قيمة العمولة", isNumeric = true),
     IGNORE("تجاهل هذا العمود");
 
     /** Declared here (a plain nested class of [ImportField]), NOT inside the `companion object`
@@ -108,6 +120,22 @@ enum class ImportField(val labelAr: String, val isNumeric: Boolean = false) {
             DictEntry(
                 NOTES,
                 setOf("ملاحظات", "ملاحظة", "notes", "remarks", "comment")
+            ),
+            DictEntry(
+                UNIT_PRICE,
+                setOf("سعر الوحدة", "السعر", "سعر البيع", "unit price", "price")
+            ),
+            DictEntry(
+                DISCOUNT_PERCENT,
+                setOf("نسبة الخصم", "الخصم", "discount", "discount %", "discount percent")
+            ),
+            DictEntry(
+                TARGET_GROUP,
+                setOf("مجموعة الهدف", "المجموعة", "الفئة المستهدفة", "target group", "tier")
+            ),
+            DictEntry(
+                COMMISSION_VALUE,
+                setOf("قيمة العمولة", "العمولة", "commission", "commission value")
             ),
             // Bare, genuinely ambiguous terms — per spec these must NOT be silently folded into
             // CURRENT_STOCK/REQUESTED_QUANTITY/COUNTED_QUANTITY. Suggested as QUANTITY, flagged.
