@@ -51,7 +51,6 @@ moshi = "1.15.1"
 # (authorization/scopes) — the legacy GoogleSignInClient in play-services-auth is deprecated.
 playServicesAuth = "22.0.0" # verified against the live developer.android.com/identity/authorization page (English canonical, fetched directly rather than trusting an older cached/localized snapshot that showed 21.5.0/21.5.1)
 # Backend module (plain Kotlin/JVM, never bundled into the APK).
-kotlinJvm = "2.3.20" # same Kotlin compiler already verified for :app, reused for consistency.
 ktor = "3.5.2"
 kotlinxSerializationJson = "1.11.0"
 logback = "1.5.37"
@@ -122,5 +121,5 @@ kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlinJvm" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinJvm" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
