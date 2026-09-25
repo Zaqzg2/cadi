@@ -21,10 +21,6 @@ application {
     mainClass.set("com.inventorysmartai.backend.ApplicationKt")
 }
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
