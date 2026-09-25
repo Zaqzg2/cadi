@@ -21,6 +21,12 @@ application {
     mainClass.set("com.inventorysmartai.backend.ApplicationKt")
 }
 
+// No repositories {} block here — settings.gradle.kts already centralizes google()/mavenCentral()
+// for every module (dependencyResolutionManagement with FAIL_ON_PROJECT_REPOS), exactly like
+// :app/build.gradle.kts, which has no repositories block of its own either. Declaring one here
+// too is what the previous CI run's "Build was configured to prefer settings repositories over
+// project repositories" failure was pointing at — not a missing repository, a duplicate one.
+
 dependencies {
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
