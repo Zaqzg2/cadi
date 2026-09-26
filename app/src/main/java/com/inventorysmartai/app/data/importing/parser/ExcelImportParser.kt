@@ -38,12 +38,14 @@ class ExcelImportParser @Inject constructor() : ImportParser {
     }
 
     override suspend fun listSheets(file: OpenedFile): List<String?> = withContext(Dispatchers.IO) {
+        useAppClassLoaderForStax()
         ReadableWorkbook(file.inputStream()).use { workbook ->
             workbook.sheets.map { it.name as String? }.collect(Collectors.toList())
         }
     }
 
     override suspend fun parseSheet(file: OpenedFile, sheetName: String?): RawTable = withContext(Dispatchers.IO) {
+        useAppClassLoaderForStax()
         ReadableWorkbook(file.inputStream()).use { workbook ->
             val sheet = if (sheetName != null) {
                 workbook.sheets.filter { it.name == sheetName }.findFirst()
@@ -63,5 +65,24 @@ class ExcelImportParser @Inject constructor() : ImportParser {
             }
             RawTable(sheetName = sheet.name, rows = rows)
         }
+    }
+
+    /**
+     * `ReadableWorkbook` resolves its StAX implementation via
+     * `javax.xml.stream.XMLInputFactory.newInstance()`, which loads the provider class
+     * (`org.dhatim.fastexcel.reader.DefaultXMLInputFactory`) by name using the calling
+     * **thread's context class loader** — not the app's own class loader. On Android, threads
+     * that Kotlin coroutines' `Dispatchers.IO` pool creates internally do not inherit the app's
+     * class loader as their context class loader (it defaults to the boot class loader, which
+     * only knows Android's built-in stub classes). The provider class lives in the app's own APK,
+     * so that lookup throws `ClassNotFoundException: org.dhatim.fastexcel.reader.
+     * DefaultXMLInputFactory` — this is what surfaces as "تعذّر قراءة الملف: org.dhatim.fastexcel.
+     * reader.DefaultXMLInputFactory" in the UI. Explicitly setting the context class loader to
+     * this class's own loader (guaranteed to be the app's) before touching `ReadableWorkbook`
+     * fixes the lookup. Must be called on the same (IO-dispatcher) thread that will run the
+     * `ReadableWorkbook` call, since the context class loader is thread-local.
+     */
+    private fun useAppClassLoaderForStax() {
+        Thread.currentThread().contextClassLoader = javaClass.classLoader
     }
 }
