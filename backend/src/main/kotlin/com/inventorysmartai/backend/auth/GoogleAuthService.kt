@@ -48,7 +48,7 @@ class GoogleAuthService(
      *  obtains. [sessionId] is the app-generated device/session identifier this backend uses as
      *  the token-store key (see [TokenStore]). */
     suspend fun linkAccount(sessionId: String, serverAuthCode: String): StoredGoogleTokens {
-        val response = submitForm(
+        val response = http.submitForm(
             url = GOOGLE_TOKEN_ENDPOINT,
             formParameters = Parameters.build {
                 append("code", serverAuthCode)
@@ -99,7 +99,7 @@ class GoogleAuthService(
     suspend fun unlink(sessionId: String) = tokenStore.remove(sessionId)
 
     private suspend fun refresh(stored: StoredGoogleTokens): StoredGoogleTokens {
-        val response = submitForm(
+        val response = http.submitForm(
             url = GOOGLE_TOKEN_ENDPOINT,
             formParameters = Parameters.build {
                 append("refresh_token", stored.refreshToken)

@@ -15,6 +15,7 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -34,7 +35,7 @@ class GoogleApiException(val service: String, val statusCode: Int, message: Stri
 /** Shared plumbing every Google REST client below needs: a Bearer-token JSON call plus one place
  *  that turns a non-2xx response into [GoogleApiException]. Each real client stays a thin, focused
  *  wrapper over the handful of endpoints Phase 4 actually needs — not a full generated SDK. */
-internal abstract class BaseGoogleApiClient(protected val http: HttpClient, private val serviceName: String) {
+abstract class BaseGoogleApiClient(protected val http: HttpClient, private val serviceName: String) {
 
     protected suspend fun getJson(url: String, accessToken: String): JsonObject =
         parse(http.get(url) { bearerJson(accessToken) })

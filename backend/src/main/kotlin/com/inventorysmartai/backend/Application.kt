@@ -34,11 +34,12 @@ import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.callloging.CallLogging
+import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.response.respond
+import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 import org.slf4j.event.Level
@@ -120,7 +121,7 @@ fun Application.module() {
         googleWorkspaceRoutes(googleAuthService, driveClient, sheetsClient, backendToolExecutor)
         statusRoutes(tokenStore, geminiClient)
 
-        io.ktor.server.routing.get("/health") { call.respond(mapOf("status" to "ok")) }
+        get("/health") { call.respond(mapOf("status" to "ok")) }
     }
 }
 
