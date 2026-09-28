@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.coroutines.cancellation.CancellationException
 
 /** Source types the AI extraction path handles — everything else still goes through
  *  [ImportEngine]'s tabular CSV/Excel pipeline. See [ImportFlowViewModel.runAnalysis]. */
@@ -127,8 +128,25 @@ class ImportFlowViewModel @Inject constructor(
 
     private fun loadSheets(file: OpenedFile, sourceType: ImportSourceType) {
         viewModelScope.launch {
-            val sheets = runCatching { importEngine.listSheets(file, sourceType) }.getOrDefault(listOf(null))
-            update { it.copy(isBusy = false, sheets = sheets, selectedSheet = sheets.firstOrNull()) }
+            runCatching { importEngine.listSheets(file, sourceType) }
+                .onSuccess { sheets ->
+                    update { it.copy(isBusy = false, sheets = sheets, selectedSheet = sheets.firstOrNull()) }
+                }
+                .onFailure { e ->
+                    if (e is CancellationException) throw e
+                    // This used to fall back silently to a fake single unnamed sheet
+                    // (`getOrDefault(listOf(null))`), which hid the real failure: the user could
+                    // tap "متابعة" and only hit an error later, on the analysis screen, from a
+                    // second, downstream failure — with the first (root-cause) one never shown.
+                    // Report it here, right after the file is picked, like every other file
+                    // problem in onFilePicked.
+                    update {
+                        it.copy(
+                            isBusy = false,
+                            fileError = "تعذّر قراءة أوراق الملف: ${e.message ?: e.javaClass.simpleName}"
+                        )
+                    }
+                }
         }
     }
 

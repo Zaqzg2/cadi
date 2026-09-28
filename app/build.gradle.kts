@@ -26,7 +26,7 @@ android {
         // a separate OAuth client" section) — this is a public identifier, not a secret, safe to
         // ship in the APK; it is what tells Google's consent screen which backend is asking for
         // offline access. Placeholder until a real Cloud Console project exists.
-        buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"CHANGE-ME.apps.googleusercontent.com\"")
+        buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"ID870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com\"")
     }
 
     buildTypes {
