@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "870544200288",
+    "project_id": "cadyia",
+    "storage_bucket": "cadyia.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:870544200288:android:5a5245d5c1bbd9bac6a905",
+        "android_client_info": {
+          "package_name": "com.inventorysmartai.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBLcjZcoAA5WZJ3CT2hUKS4JNJZQT82p1Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:870544200288:android:e6dd8c2f1bfa60e4c6a905",
+        "android_client_info": {
+          "package_name": "com.inventorysmartai.app.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBLcjZcoAA5WZJ3CT2hUKS4JNJZQT82p1Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
