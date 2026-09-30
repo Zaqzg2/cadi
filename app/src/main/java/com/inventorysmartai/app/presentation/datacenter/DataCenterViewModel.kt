@@ -19,10 +19,10 @@ class DataCenterViewModel @Inject constructor(
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
-    /** Phase 3: EXCEL/CSV tiles no longer call this — DataCenterScreen routes them straight into
-     *  the real import flow (see presentation/datacenter/importflow). This still handles the
-     *  PDF/IMAGE/CAMERA/BARCODE/MANUAL placeholders exactly as before: no OCR/AI parsing here,
-     *  by design (see the phase spec) — this only records that the tile was tapped. */
+    /** EXCEL/CSV/PDF/IMAGE tiles no longer call this — DataCenterScreen routes them straight into
+     *  the real import flow (see presentation/datacenter/importflow; PDF/images go through AI
+     *  extraction there). This still handles the CAMERA/BARCODE/MANUAL placeholders: nothing is
+     *  parsed here, it only records that the tile was tapped. */
     fun onImportTileTapped(sourceType: ImportSourceType) {
         viewModelScope.launch {
             importRepository.createJob(sourceType, fileName = null)

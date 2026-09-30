@@ -75,7 +75,12 @@ import com.inventorysmartai.app.data.local.database.entity.UnitEntity
         AuditLogEntity::class
     ],
     version = 4,
-    exportSchema = true
+    // Off on purpose. With it on, the debug and release KSP tasks both write and read the same
+    // app/schemas/.../4.json; Gradle runs them concurrently, and one reads while the other is mid-write
+    // ("Expected colon ':', but had 'EOF'" — the CI failure). Nothing uses the export today: migrations
+    // are still fallbackToDestructiveMigration and there are no migration tests. Turn it back on with the
+    // Room Gradle Plugin (androidx.room) when real migrations start — see README, fix log item 6.
+    exportSchema = false
 )
 abstract class InventorySmartDatabase : RoomDatabase() {
     abstract fun productDao(): ProductDao

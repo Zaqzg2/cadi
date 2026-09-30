@@ -8,6 +8,17 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Firebase (AI Logic + App Check). google-services.json is downloaded from YOUR Firebase project and is
+// not in the repo, so the plugin is applied only when the file is present. Without it the app still
+// builds and runs — everything except the AI features works, and those say "not configured" — which
+// is also what keeps CI green before the file is added. NOTE: the debug build type has
+// applicationIdSuffix ".debug", so the file must list BOTH com.inventorysmartai.app and
+// com.inventorysmartai.app.debug (register both Android apps in the Firebase console), otherwise the
+// plugin fails with "No matching client found for package name".
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.inventorysmartai.app"
     compileSdk = 36
@@ -26,7 +37,7 @@ android {
         // a separate OAuth client" section) — this is a public identifier, not a secret, safe to
         // ship in the APK; it is what tells Google's consent screen which backend is asking for
         // offline access. Placeholder until a real Cloud Console project exists.
-        buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"ID870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com\"")
+        buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"CHANGE-ME.apps.googleusercontent.com\"")
     }
 
     buildTypes {
@@ -73,9 +84,10 @@ kotlin {
     }
 }
 
-// Room schema history — check these JSON files into the repo once real migrations start.
+// No room.schemaLocation on purpose: with schema export on, the debug and release KSP tasks race to write
+// and read the same JSON file and CI fails intermittently (README, fix log item 6). Re-enable it with the
+// Room Gradle Plugin (androidx.room) once real migrations exist.
 ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.generateKotlin", "true")
 }
 
@@ -113,8 +125,8 @@ dependencies {
     implementation(libs.fastexcel.reader)
     // CSV is hand-parsed (see data/importing/parser/CsvImportParser.kt) — no dependency needed.
 
-    // --- Phase 4: talks only to this app's own backend (never directly to Gemini or Google
-    // APIs — see the backend module's README for why) ---
+    // --- Phase 4: networking to this app's own backend (paused for now; see the backend module's
+    // README). AI document extraction does NOT go through it — see Firebase AI Logic below. ---
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.moshi)
     implementation(libs.okhttp)
@@ -130,6 +142,15 @@ dependencies {
     // this app needs — its own account-picker UI is part of the same consent flow, so a separate
     // Credential Manager sign-in step would only add a second screen with no real benefit here.)
     implementation(libs.play.services.auth)
+
+    // Firebase AI Logic: the app calls Gemini itself, and App Check (Play Integrity in release, the debug
+    // provider in debug — see src/debug and src/release AppCheckInstaller) proves the call comes from this
+    // app, so no API key ships in the APK. The debug provider is debugImplementation so it cannot reach a
+    // release build. Versions come from the BoM.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.ai)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
 
     testImplementation(libs.junit)
     testImplementation(libs.fastexcel.writer) // builds real .xlsx fixtures for ExcelImportParser tests

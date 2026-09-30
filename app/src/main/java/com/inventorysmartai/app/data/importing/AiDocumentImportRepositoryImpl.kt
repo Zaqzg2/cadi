@@ -12,6 +12,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// The backend-routed implementation. Not bound at the moment: di/RepositoryModule binds
+// FirebaseAiDocumentImportRepositoryImpl (direct, App Check protected) while the backend is paused.
 @Singleton
 class AiDocumentImportRepositoryImpl @Inject constructor(
     private val api: BackendApi,

@@ -6,7 +6,7 @@ import com.inventorysmartai.app.data.google.DeviceSessionRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleAuthRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleServiceStatusRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleWorkspaceRepositoryImpl
-import com.inventorysmartai.app.data.importing.AiDocumentImportRepositoryImpl
+import com.inventorysmartai.app.data.importing.FirebaseAiDocumentImportRepositoryImpl
 import com.inventorysmartai.app.data.importing.AndroidContentImportSource
 import com.inventorysmartai.app.data.importing.DefaultImportEngine
 import com.inventorysmartai.app.data.importing.DefaultImportReviewManager
@@ -89,7 +89,10 @@ abstract class RepositoryModule {
     // --- Phase 4: AI + Google ecosystem ---
     @Binds @Singleton abstract fun bindAssistantRepository(impl: AssistantRepositoryImpl): AssistantRepository
     @Binds @Singleton abstract fun bindLocalToolExecutor(impl: DefaultLocalToolExecutor): LocalToolExecutor
-    @Binds @Singleton abstract fun bindAiDocumentImportRepository(impl: AiDocumentImportRepositoryImpl): AiDocumentImportRepository
+    // The phone calls Gemini itself through Firebase AI Logic (App Check attests the app; there is no API
+    // key in the APK) while the backend is paused. To route through the backend again, bind
+    // AiDocumentImportRepositoryImpl here instead (that class is unchanged and still compiles).
+    @Binds @Singleton abstract fun bindAiDocumentImportRepository(impl: FirebaseAiDocumentImportRepositoryImpl): AiDocumentImportRepository
     @Binds @Singleton abstract fun bindDeviceSessionRepository(impl: DeviceSessionRepositoryImpl): DeviceSessionRepository
     @Binds @Singleton abstract fun bindGoogleAuthRepository(impl: GoogleAuthRepositoryImpl): GoogleAuthRepository
     @Binds @Singleton abstract fun bindGoogleWorkspaceRepository(impl: GoogleWorkspaceRepositoryImpl): GoogleWorkspaceRepository

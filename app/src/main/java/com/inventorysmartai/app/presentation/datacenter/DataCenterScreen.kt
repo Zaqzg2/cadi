@@ -48,6 +48,15 @@ import com.inventorysmartai.app.navigation.Destination
 
 private data class ImportTile(val type: ImportSourceType, val label: String, val icon: ImageVector)
 
+/** Tiles that open the real import flow. CAMERA (needs an in-app capture screen), BARCODE and
+ *  MANUAL are still placeholders — see DataCenterViewModel.onImportTileTapped. */
+private val IMPORT_FLOW_TILE_TYPES = setOf(
+    ImportSourceType.EXCEL,
+    ImportSourceType.CSV,
+    ImportSourceType.PDF,
+    ImportSourceType.IMAGE
+)
+
 private val importTiles = listOf(
     ImportTile(ImportSourceType.EXCEL, "Excel", Icons.Filled.TableChart),
     ImportTile(ImportSourceType.CSV, "CSV", Icons.Filled.Description),
@@ -113,11 +122,13 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
-                                // Excel/CSV both go through the same real import flow — the
+                                // Excel/CSV/PDF/image all go through the same real import flow — the
                                 // FileDetector step sniffs the actual file content regardless of
                                 // which tile was tapped, so there's no separate "wrong tile"
-                                // failure mode for a mis-tapped Excel-vs-CSV choice.
-                                if (tile.type == ImportSourceType.EXCEL || tile.type == ImportSourceType.CSV) {
+                                // failure mode (a photo picked under "Excel" still takes the AI path).
+                                // PDF and image used to fall through to the "coming later" placeholder
+                                // even though the AI extraction behind them was already built.
+                                if (tile.type in IMPORT_FLOW_TILE_TYPES) {
                                     navController.navigate(Destination.ImportSetup.route)
                                 } else {
                                     viewModel.onImportTileTapped(tile.type)
