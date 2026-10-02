@@ -3,6 +3,7 @@ package com.inventorysmartai.app.presentation.settings.googleservices
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.common.api.ApiException
 import com.inventorysmartai.app.BuildConfig
 import com.inventorysmartai.app.data.google.GoogleAuthCancelledException
 import com.inventorysmartai.app.data.google.GoogleAuthManager
@@ -52,6 +53,12 @@ class GoogleServicesStatusViewModel @Inject constructor(
     /** [activity] is used only for the duration of this one call (to launch Google's consent UI
      *  if needed) — never retained, so this does not leak the Activity past its own lifecycle. */
     fun connect(activity: ComponentActivity) {
+        // Fail fast with the real reason instead of letting Google reject a placeholder client id with an
+        // opaque error that the generic message below would hide.
+        if (BuildConfig.GOOGLE_BACKEND_SERVER_CLIENT_ID.startsWith("CHANGE-ME")) {
+            update { it.copy(errorMessage = "لم يتم ضبط GOOGLE_BACKEND_SERVER_CLIENT_ID في إعدادات البناء — أضف معرّف OAuth (Web application) ثم أعد بناء التطبيق") }
+            return
+        }
         viewModelScope.launch {
             update { it.copy(isConnecting = true, errorMessage = null) }
             runCatching {
@@ -77,7 +84,16 @@ class GoogleServicesStatusViewModel @Inject constructor(
 
     private fun mapError(e: Throwable): String = when (e) {
         is GoogleAuthCancelledException -> e.message ?: "تم إلغاء العملية"
+        is BackendFailure.NetworkUnavailable ->
+            "تعذّر الوصول إلى الخادم (${BuildConfig.BACKEND_BASE_URL}) — تأكد أنه يعمل وأن العنوان صحيح. " +
+                "العنوان 10.0.2.2 يعمل على المحاكي فقط؛ على الهاتف استخدم عنوان الجهاز في الشبكة أو رابط الخادم المنشور"
         is BackendFailure -> e.messageAr
+        is ApiException -> when (e.statusCode) {
+            10 -> "خطأ إعداد (DEVELOPER_ERROR): تأكد من إنشاء OAuth client من نوع Android في Google Cloud بنفس اسم الحزمة وبصمة SHA-1 للتوقيع"
+            7 -> "لا يوجد اتصال بالإنترنت"
+            12501, 16 -> "تم إلغاء العملية"
+            else -> "تعذّر ربط حساب Google (رمز ${e.statusCode})"
+        }
         else -> "تعذّر ربط حساب Google، يرجى المحاولة مرة أخرى"
     }
 

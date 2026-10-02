@@ -38,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import com.inventorysmartai.app.presentation.common.startBarcodeScan
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,13 +50,14 @@ import com.inventorysmartai.app.navigation.Destination
 
 private data class ImportTile(val type: ImportSourceType, val label: String, val icon: ImageVector)
 
-/** Tiles that open the real import flow. CAMERA (needs an in-app capture screen), BARCODE and
- *  MANUAL are still placeholders — see DataCenterViewModel.onImportTileTapped. */
+/** Tiles that open the file/photo import flow. CAMERA lands on the same setup screen, which has a
+ *  "take a photo" button. BARCODE opens the scanner; MANUAL opens the manual product form. */
 private val IMPORT_FLOW_TILE_TYPES = setOf(
     ImportSourceType.EXCEL,
     ImportSourceType.CSV,
     ImportSourceType.PDF,
-    ImportSourceType.IMAGE
+    ImportSourceType.IMAGE,
+    ImportSourceType.CAMERA
 )
 
 private val importTiles = listOf(
@@ -92,7 +95,21 @@ private val externalServices = listOf("Google Drive", "Google Sheets", "Google D
 @Composable
 fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewModel = hiltViewModel()) {
     val snackbarMessage by viewModel.snackbarMessage.collectAsStateWithLifecycle()
+    val scanResult by viewModel.scanResult.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(scanResult) {
+        scanResult?.let { result ->
+            viewModel.onScanResultHandled()
+            if (result.productId != null) {
+                navController.navigate(Destination.ProductDetail.createRoute(result.productId))
+            } else {
+                // Unknown barcode: offer to register it as a new product, barcode pre-filled.
+                navController.navigate(Destination.ManualEntry.createRoute(result.barcode))
+            }
+        }
+    }
 
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let {
@@ -128,10 +145,14 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
                                 // failure mode (a photo picked under "Excel" still takes the AI path).
                                 // PDF and image used to fall through to the "coming later" placeholder
                                 // even though the AI extraction behind them was already built.
-                                if (tile.type in IMPORT_FLOW_TILE_TYPES) {
-                                    navController.navigate(Destination.ImportSetup.route)
-                                } else {
-                                    viewModel.onImportTileTapped(tile.type)
+                                when {
+                                    tile.type in IMPORT_FLOW_TILE_TYPES -> navController.navigate(Destination.ImportSetup.route)
+                                    tile.type == ImportSourceType.BARCODE -> startBarcodeScan(
+                                        context,
+                                        onResult = viewModel::onBarcodeScanned,
+                                        onError = viewModel::onScanFailed
+                                    )
+                                    tile.type == ImportSourceType.MANUAL -> navController.navigate(Destination.ManualEntry.createRoute())
                                 }
                             }
                         ) {

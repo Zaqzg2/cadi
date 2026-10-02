@@ -13,6 +13,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import android.net.Uri
+import java.io.File
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -59,6 +67,26 @@ fun ImportSetupScreen(navController: NavController, viewModel: ImportFlowViewMod
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { viewModel.onFilePicked(it.toString()) }
+    }
+
+    // Camera: the system camera app writes a JPEG into our FileProvider cache dir, then the result goes
+    // through the same onFilePicked path as a picked image (so AI extraction handles it identically).
+    // No CAMERA permission is needed because the capture is delegated to the camera app.
+    val context = LocalContext.current
+    var pendingPhotoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val uri = pendingPhotoUri
+        pendingPhotoUri = null
+        if (saved && uri != null) viewModel.onFilePicked(uri.toString())
+    }
+    val launchCamera = {
+        runCatching {
+            val dir = File(context.cacheDir, "captures").apply { mkdirs() }
+            val file = File.createTempFile("capture_", ".jpg", dir)
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            pendingPhotoUri = uri
+            takePictureLauncher.launch(uri)
+        }
     }
 
     LaunchedEffect(state.snackbarMessage) {
@@ -151,6 +179,9 @@ fun ImportSetupScreen(navController: NavController, viewModel: ImportFlowViewMod
                         }
                         Button(onClick = { filePickerLauncher.launch(IMPORT_TYPE_MIME_TYPES) }, modifier = Modifier.fillMaxWidth()) {
                             Text(if (state.pickedFileName == null) "اختر ملفًا (Excel، CSV، PDF، أو صورة)" else "اختيار ملف آخر")
+                        }
+                        OutlinedButton(onClick = { launchCamera() }, modifier = Modifier.fillMaxWidth()) {
+                            Text("التقاط صورة بالكاميرا")
                         }
                     }
                 }

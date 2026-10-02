@@ -7,6 +7,7 @@ import com.inventorysmartai.app.data.local.database.dao.InventoryMovementDao
 import com.inventorysmartai.app.data.local.database.dao.ProductDao
 import com.inventorysmartai.app.data.local.database.dao.UnitDao
 import com.inventorysmartai.app.data.local.database.entity.InventoryEntity
+import com.inventorysmartai.app.data.local.database.entity.InventoryMovementEntity
 import com.inventorysmartai.app.data.local.database.entity.ProductEntity
 import com.inventorysmartai.app.data.local.datastore.SettingsLocalDataSource
 import com.inventorysmartai.app.domain.inventory.InventoryStatusCalculator
@@ -126,6 +127,27 @@ class ProductRepositoryImpl @Inject constructor(
             updatedAt = now
         )
         return productDao.upsert(entity)
+    }
+
+    override suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double): Long {
+        val productId = upsert(product.copy(id = 0L))
+        if (branchId != null && openingQuantity > 0.0) {
+            val now = System.currentTimeMillis()
+            inventoryDao.upsert(
+                InventoryEntity(productId = productId, branchId = branchId, quantity = openingQuantity, createdAt = now, updatedAt = now)
+            )
+            inventoryMovementDao.insert(
+                InventoryMovementEntity(
+                    productId = productId,
+                    branchId = branchId,
+                    movementType = MovementType.MANUAL.name,
+                    quantityChange = openingQuantity,
+                    notes = "رصيد افتتاحي (إدخال يدوي)",
+                    createdAt = now
+                )
+            )
+        }
+        return productId
     }
 
     private fun buildSummary(

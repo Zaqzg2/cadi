@@ -2,8 +2,7 @@ package com.inventorysmartai.app.presentation.datacenter
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.inventorysmartai.app.domain.model.ImportSourceType
-import com.inventorysmartai.app.domain.repository.ImportRepository
+import com.inventorysmartai.app.domain.repository.ProductRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,40 +10,41 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Outcome of a barcode scan: [productId] is the matching product, or null when none matches. */
+data class BarcodeScanResult(val barcode: String, val productId: Long?)
+
 @HiltViewModel
 class DataCenterViewModel @Inject constructor(
-    private val importRepository: ImportRepository
+    private val productRepository: ProductRepository
 ) : ViewModel() {
 
     private val _snackbarMessage = MutableStateFlow<String?>(null)
     val snackbarMessage: StateFlow<String?> = _snackbarMessage.asStateFlow()
 
-    /** EXCEL/CSV/PDF/IMAGE tiles no longer call this — DataCenterScreen routes them straight into
-     *  the real import flow (see presentation/datacenter/importflow; PDF/images go through AI
-     *  extraction there). This still handles the CAMERA/BARCODE/MANUAL placeholders: nothing is
-     *  parsed here, it only records that the tile was tapped. */
-    fun onImportTileTapped(sourceType: ImportSourceType) {
+    private val _scanResult = MutableStateFlow<BarcodeScanResult?>(null)
+    val scanResult: StateFlow<BarcodeScanResult?> = _scanResult.asStateFlow()
+
+    fun onBarcodeScanned(rawValue: String) {
+        val barcode = rawValue.trim()
+        if (barcode.isEmpty()) {
+            _snackbarMessage.value = "لم يتم التعرّف على الباركود، حاول مرة أخرى"
+            return
+        }
         viewModelScope.launch {
-            importRepository.createJob(sourceType, fileName = null)
-            _snackbarMessage.value = "استيراد ${sourceLabel(sourceType)} سيتم تفعيله في مرحلة قادمة"
+            val product = runCatching { productRepository.getByBarcode(barcode) }.getOrNull()
+            _scanResult.value = BarcodeScanResult(barcode, product?.id)
         }
     }
+
+    fun onScanFailed(message: String?) {
+        _snackbarMessage.value = "تعذّر تشغيل ماسح الباركود" + (message?.let { ": $it" } ?: "")
+    }
+
+    fun onScanResultHandled() { _scanResult.value = null }
 
     fun onExternalServiceTapped(serviceName: String) {
         _snackbarMessage.value = "التكامل مع $serviceName قادم قريباً"
     }
 
-    fun onSnackbarShown() {
-        _snackbarMessage.value = null
-    }
-
-    private fun sourceLabel(type: ImportSourceType): String = when (type) {
-        ImportSourceType.EXCEL -> "Excel"
-        ImportSourceType.CSV -> "CSV"
-        ImportSourceType.PDF -> "PDF"
-        ImportSourceType.IMAGE -> "الصور"
-        ImportSourceType.CAMERA -> "الكاميرا"
-        ImportSourceType.BARCODE -> "الباركود"
-        ImportSourceType.MANUAL -> "الإدخال اليدوي"
-    }
+    fun onSnackbarShown() { _snackbarMessage.value = null }
 }

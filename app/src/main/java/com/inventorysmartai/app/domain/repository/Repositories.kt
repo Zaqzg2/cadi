@@ -20,6 +20,11 @@ interface ProductRepository {
     suspend fun getByBarcode(barcode: String): Product?
     suspend fun getByItemNumber(itemNumber: String): Product?
     suspend fun upsert(product: Product): Long
+
+    /** Manual entry: inserts a NEW product and, when [branchId] is set and [openingQuantity] > 0, its
+     *  opening stock row plus a MANUAL movement. Callers must check barcode/item-number duplicates
+     *  first — [upsert] uses REPLACE on unique indexes, so a duplicate would overwrite another product. */
+    suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double): Long
 }
 
 interface CatalogRepository {

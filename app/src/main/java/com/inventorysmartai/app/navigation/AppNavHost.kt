@@ -19,6 +19,7 @@ import com.inventorysmartai.app.presentation.settings.googleservices.GoogleServi
 import com.inventorysmartai.app.presentation.counting.detail.CountingDetailScreen
 import com.inventorysmartai.app.presentation.counting.list.CountingListScreen
 import com.inventorysmartai.app.presentation.datacenter.DataCenterScreen
+import com.inventorysmartai.app.presentation.datacenter.manual.ManualEntryScreen
 import com.inventorysmartai.app.presentation.datacenter.history.ImportHistoryScreen
 import com.inventorysmartai.app.presentation.datacenter.history.ImportJobDetailScreen
 import com.inventorysmartai.app.presentation.datacenter.importflow.ImportAnalyzingScreen
@@ -132,6 +133,11 @@ fun AppNavHost() {
                 Destination.ImportJobDetail.route,
                 arguments = listOf(navArgument(Destination.ImportJobDetail.ARG_JOB_ID) { type = NavType.LongType })
             ) { ImportJobDetailScreen(navController) }
+
+            composable(
+                Destination.ManualEntry.route,
+                arguments = listOf(navArgument(Destination.ManualEntry.ARG_BARCODE) { type = NavType.StringType; defaultValue = "" })
+            ) { ManualEntryScreen(navController) }
 
             composable(
                 Destination.PartyList.route,

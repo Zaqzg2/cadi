@@ -19,6 +19,18 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
 
+// Values that differ per developer/deployment. Resolution order: -P flag / gradle.properties, then an
+// environment variable of the same name, then the old placeholder (the app detects the placeholder and
+// tells the user exactly what is missing instead of failing with a generic error).
+fun configValue(name: String, fallback: String): String =
+    (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(name)?.takeIf { it.isNotBlank() }
+        ?: fallback
+
+val googleServerClientId = configValue("GOOGLE_BACKEND_SERVER_CLIENT_ID", "CHANGE-ME.apps.googleusercontent.com")
+val backendUrlDebug = configValue("BACKEND_BASE_URL_DEBUG", "http://10.0.2.2:8080/")
+val backendUrlRelease = configValue("BACKEND_BASE_URL", "https://CHANGE-ME.example.com/")
+
 android {
     namespace = "com.inventorysmartai.app"
     compileSdk = 36
@@ -37,7 +49,9 @@ android {
         // a separate OAuth client" section) — this is a public identifier, not a secret, safe to
         // ship in the APK; it is what tells Google's consent screen which backend is asking for
         // offline access. Placeholder until a real Cloud Console project exists.
-        buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"CHANGE-ME.apps.googleusercontent.com\"")
+        // Override without editing code: -PGOOGLE_BACKEND_SERVER_CLIENT_ID=... , gradle.properties, or the
+        // same-named environment variable (e.g. a GitHub Actions secret).
+        buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"$googleServerClientId\"")
     }
 
     // A FIXED debug signing key. Without it every CI run signs the debug APK with a freshly generated key,
@@ -68,7 +82,7 @@ android {
             // ever distributed — this placeholder exists only so the app fails obviously
             // (network calls simply fail against localhost) rather than compiling in some
             // guessed-at "probably production" URL. See backend/README.md for what to deploy.
-            buildConfigField("String", "BACKEND_BASE_URL", "\"https://CHANGE-ME.example.com/\"")
+            buildConfigField("String", "BACKEND_BASE_URL", "\"${backendUrlRelease}\"")
         }
         debug {
             isDebuggable = true
@@ -76,7 +90,7 @@ android {
             // 10.0.2.2 is the Android emulator's alias for the host machine's localhost — run
             // `./gradlew :backend:run` on the same machine the emulator runs on. A physical
             // device needs the host's real LAN IP instead.
-            buildConfigField("String", "BACKEND_BASE_URL", "\"http://10.0.2.2:8080/\"")
+            buildConfigField("String", "BACKEND_BASE_URL", "\"${backendUrlDebug}\"")
         }
     }
 
@@ -161,6 +175,9 @@ dependencies {
     // this app needs — its own account-picker UI is part of the same consent flow, so a separate
     // Credential Manager sign-in step would only add a second screen with no real benefit here.)
     implementation(libs.play.services.auth)
+
+    // Barcode scanner (Data Center "الباركود" tile + Inventory scan button).
+    implementation(libs.play.services.code.scanner)
 
     // Firebase AI Logic: the app calls Gemini itself, and App Check (Play Integrity in release, the debug
     // provider in debug — see src/debug and src/release AppCheckInstaller) proves the call comes from this

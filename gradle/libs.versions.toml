@@ -59,6 +59,9 @@ logback = "1.5.37"
 # Both taken from Firebase's own getting-started page (updated 24 Sept 2026): BoM 34.19.0 and the
 # Google Services Gradle plugin 4.4.4. Individual Firebase artifacts take their version from the BoM.
 firebaseBom = "34.19.0"
+# Barcode scanning through Google Play services' code scanner: Google supplies the scanner UI, so the app
+# needs no CAMERA permission and no CameraX/ML Kit setup of its own.
+codeScanner = "16.1.0"
 googleServices = "4.4.4"
 
 [libraries]
@@ -110,6 +113,7 @@ play-services-auth = { group = "com.google.android.gms", name = "play-services-a
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-ai = { group = "com.google.firebase", name = "firebase-ai" }
 firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "firebase-appcheck-playintegrity" }
+play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "codeScanner" }
 firebase-appcheck-debug = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 
 # --- Phase 4: backend module (plain JVM/Ktor — not part of the Android app) ---

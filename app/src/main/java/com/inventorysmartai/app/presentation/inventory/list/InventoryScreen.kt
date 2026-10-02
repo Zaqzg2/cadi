@@ -12,6 +12,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.platform.LocalContext
+import com.inventorysmartai.app.presentation.common.startBarcodeScan
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,14 +57,27 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showFilterSheet by remember { mutableStateOf(false) }
     var showAdvancedSearch by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("المخزون") },
                 actions = {
+                    IconButton(onClick = {
+                        startBarcodeScan(
+                            context,
+                            onResult = { code ->
+                                viewModel.onBarcodeQueryChange(code)
+                                showAdvancedSearch = true
+                            },
+                            onError = {}
+                        )
+                    }) {
+                        Icon(Icons.Filled.QrCodeScanner, contentDescription = "مسح الباركود")
+                    }
                     IconButton(onClick = { showAdvancedSearch = !showAdvancedSearch }) {
-                        Icon(Icons.Filled.QrCodeScanner, contentDescription = "بحث بالباركود / رقم الصنف")
+                        Icon(Icons.Filled.Search, contentDescription = "بحث برقم الصنف / الباركود")
                     }
                     IconButton(onClick = { showFilterSheet = true }) {
                         Icon(Icons.Filled.FilterList, contentDescription = "الفرز والفلاتر")
