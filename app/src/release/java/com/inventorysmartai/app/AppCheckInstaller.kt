@@ -1,5 +1,6 @@
 package com.inventorysmartai.app
 
+import android.content.Context
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 
@@ -15,6 +16,10 @@ internal object AppCheckInstaller {
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
     }
 
-    /** Release builds have no debug secret (and never read the log). */
-    fun recentDebugSecret(): String? = null
+    /** Release builds have no debug secret (and never read the app's files or log for one). */
+    @Suppress("UNUSED_PARAMETER")
+    fun recentDebugSecret(context: Context): String? = null
+
+    @Suppress("UNUSED_PARAMETER")
+    fun appCheckPreferenceFiles(context: Context): List<String> = emptyList()
 }

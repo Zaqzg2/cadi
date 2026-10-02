@@ -20,7 +20,9 @@ import com.google.firebase.ai.type.generationConfig
 import com.inventorysmartai.app.AppCheckInstaller
 import com.inventorysmartai.app.BuildConfig
 import com.inventorysmartai.app.data.ai.AiConfig
+import com.inventorysmartai.app.data.ai.AppCheckDebugInfo
 import com.inventorysmartai.app.data.ai.AppCheckDiagnostics
+import com.inventorysmartai.app.data.ai.AppCheckStatus
 import com.inventorysmartai.app.data.ai.AiDocumentInput
 import com.inventorysmartai.app.data.ai.AiFileTooLargeException
 import com.inventorysmartai.app.data.ai.AiInvalidOutputException
@@ -78,14 +80,20 @@ class FirebaseAiDocumentImportRepositoryImpl @Inject constructor(
             throw e
         } catch (e: Exception) {
             logFailure(e)
-            // Only for an App Check rejection, and only in debug builds (release returns null): look for
-            // the debug secret in this app's own log so the error screen can show it.
-            val debugSecret = if (AppCheckDiagnostics.isAppCheckRejection(e)) {
-                withContext(Dispatchers.IO) { AppCheckInstaller.recentDebugSecret() }
+            // Only for an App Check rejection, and only in debug builds (release returns null/empty): find
+            // the debug secret so the error screen can show it, plus what App Check left on disk, so a
+            // missing secret can be diagnosed from the screen alone.
+            val debugInfo = if (AppCheckDiagnostics.isAppCheckRejection(e)) {
+                withContext(Dispatchers.IO) {
+                    AppCheckDebugInfo(
+                        secret = AppCheckInstaller.recentDebugSecret(context),
+                        appCheckPreferenceFiles = AppCheckInstaller.appCheckPreferenceFiles(context)
+                    )
+                }
             } else {
                 null
             }
-            Result.failure(e.toBackendFailure(debugSecret))
+            Result.failure(e.toBackendFailure(debugInfo))
         }
     }
 
@@ -145,13 +153,13 @@ class FirebaseAiDocumentImportRepositoryImpl @Inject constructor(
 
 /**
  * The single place any failure of the AI path becomes a user-facing Arabic [BackendFailure].
- * [debugSecret] is the App Check debug secret found in the app's own log (debug builds), if any.
+ * [debugInfo] is what a debug build found out about the App Check debug secret (null for other failures).
  */
-internal fun Throwable.toBackendFailure(debugSecret: String? = null): BackendFailure {
+internal fun Throwable.toBackendFailure(debugInfo: AppCheckDebugInfo? = null): BackendFailure {
     if (this is BackendFailure) return this
     // First, by message: every App Check refusal from Firebase AI Logic says so in its text, whichever
     // exception class the SDK wraps it in.
-    if (AppCheckDiagnostics.isAppCheckRejection(this)) return appCheckFailure(debugSecret)
+    if (AppCheckDiagnostics.isAppCheckRejection(this)) return appCheckFailure(debugInfo)
     return when (this) {
         is AiNotConfiguredException -> BackendFailure.Structured(
             "AI_NOT_CONFIGURED",
@@ -193,7 +201,11 @@ internal fun Throwable.toBackendFailure(debugSecret: String? = null): BackendFai
                 chain.any { it is IOException } -> BackendFailure.NetworkUnavailable(this)
                 else -> BackendFailure.Structured(
                     "AI_ERROR",
-                    "تعذّر استخراج البيانات بالذكاء الاصطناعي (${this.javaClass.simpleName}: ${this.message.orEmpty().take(160)})"
+                    if (BuildConfig.DEBUG) {
+                        "تعذّر استخراج البيانات بالذكاء الاصطناعي (${this.javaClass.simpleName}: ${this.message.orEmpty().take(200)})"
+                    } else {
+                        "تعذّر استخراج البيانات بالذكاء الاصطناعي، حاول مرة أخرى بعد قليل."
+                    }
                 )
             }
         }
@@ -211,18 +223,30 @@ private fun timeoutFailure(): BackendFailure = BackendFailure.Structured(
  * needed to fix it, including the debug secret when it could be found; in release it points at Play
  * Integrity instead.
  */
-private fun appCheckFailure(debugSecret: String?): BackendFailure {
+private fun appCheckFailure(debugInfo: AppCheckDebugInfo?): BackendFailure {
     val message = if (BuildConfig.DEBUG) {
         buildString {
             append("رفضت Firebase الطلب لأن App Check لم يتحقق من هذا التطبيق.\n")
-            append("1) Firebase Console ← Security ← App Check ← تبويب APIs ← Firebase AI Logic ← Set up ← Enforced.\n")
-            append("2) تبويب Apps ← التطبيق الذي ينتهي بـ .debug ← ⋮ ← Manage debug tokens ← Add debug token ← الصق الرمز واحفظ.\n")
-            if (debugSecret != null) {
-                append("\nالرمز:\n").append(debugSecret).append("\n")
-                append("(اضغط مطوّلًا على الرمز لنسخه. لا تشارك لقطة هذه الشاشة مع أحد.)")
+            append("1) في Firebase Console، من القائمة اليسرى: App Check ← تبويب APIs ← Firebase AI Logic ← Set up ← Enforced.\n")
+            append("2) تبويب Apps ← التطبيق الذي ينتهي بـ .debug ← ⋮ ← Manage debug tokens ← Add debug token ← الصق الرمز أدناه واحفظ.\n")
+            val secret = debugInfo?.secret
+            if (secret != null) {
+                append("\nالرمز:\n").append(secret).append("\n")
+                append("(استخدم زر «نسخ الرمز» أدناه. لا تشارك لقطة هذه الشاشة مع أحد.)")
             } else {
-                append("\nلم أجد الرمز في سجل التطبيق (يُطبع عند أول تشغيل بعد التثبيت فقط): احذف التطبيق وثبّته من جديد ")
-                append("ثم أعد المحاولة، أو اقرأه من Logcat (الوسم DebugAppCheckProvider).")
+                append("\nلم أجد رمز debug في ملفات التطبيق.")
+                val installError = AppCheckStatus.installError
+                if (installError != null) {
+                    append("\nتعذّر تثبيت مزوّد App Check عند بدء التطبيق: ").append(installError)
+                } else {
+                    val files = debugInfo?.appCheckPreferenceFiles.orEmpty()
+                    if (files.isEmpty()) {
+                        append("\nلا يوجد أي ملف لـ App Check بعد، أي أن المزوّد لم يُنشئ رمزًا. أعد المحاولة مرة واحدة.")
+                    } else {
+                        append("\nملفات App Check الموجودة: ").append(files.joinToString())
+                    }
+                    append("\nإن تكرر هذا فأرسل لي لقطة هذه الشاشة (ليس فيها رمز).")
+                }
             }
         }
     } else {

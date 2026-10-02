@@ -1,7 +1,9 @@
 package com.inventorysmartai.app
 
 import android.app.Application
+import android.util.Log
 import com.google.firebase.FirebaseApp
+import com.inventorysmartai.app.data.ai.AppCheckStatus
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
@@ -23,7 +25,11 @@ class InventorySmartApp : Application() {
      */
     private fun setUpAppCheck() {
         runCatching { FirebaseApp.initializeApp(this) }.getOrNull() ?: return
-        // A failure here must never stop the app from starting.
-        runCatching { AppCheckInstaller.install() }
+        // A failure here must never stop the app from starting — but it must not be silent either: without a
+        // provider every AI request is rejected, and the error screen reports this reason (AppCheckStatus).
+        runCatching { AppCheckInstaller.install() }.onFailure { error ->
+            AppCheckStatus.installError = "${error.javaClass.simpleName}: ${error.message.orEmpty().take(120)}"
+            runCatching { Log.w("InventorySmartApp", "App Check provider could not be installed", error) }
+        }
     }
 }
