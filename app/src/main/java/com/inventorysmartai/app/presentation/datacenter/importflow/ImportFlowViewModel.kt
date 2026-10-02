@@ -31,10 +31,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.coroutines.cancellation.CancellationException
 
-/** Source types the AI extraction path handles — everything else still goes through
- *  [ImportEngine]'s tabular CSV/Excel pipeline. See [ImportFlowViewModel.runAnalysis]. */
-private val AI_SOURCE_TYPES = setOf(ImportSourceType.PDF, ImportSourceType.IMAGE, ImportSourceType.CAMERA)
-
 /**
  * Drives every step of the spec's UX flow (section 24) from "اختر نوع البيانات" through
  * "اعتماد"/"تقرير النتيجة" — steps 1 (اختر الملف) and 3 (اختر الورقة) included. One instance is

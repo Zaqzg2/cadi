@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,7 +34,15 @@ fun ImportAnalyzingScreen(navController: NavController, viewModel: ImportFlowVie
 
     LaunchedEffect(state.isBusy, state.headers) {
         if (!state.isBusy && state.headers.isNotEmpty() && state.analysisError == null) {
-            navController.navigate(Destination.ImportColumnMapping.route) {
+            // A photographed/scanned document has no spreadsheet columns to map, and "confirming" the
+            // mapping would run the whole AI extraction a second time (the ViewModel re-analyses on
+            // confirm) — so AI results go straight to review.
+            val next = if (state.detectedSourceType in AI_SOURCE_TYPES) {
+                Destination.ImportReview.route
+            } else {
+                Destination.ImportColumnMapping.route
+            }
+            navController.navigate(next) {
                 popUpTo(Destination.ImportAnalyzing.route) { inclusive = true }
             }
         }
@@ -50,12 +59,15 @@ fun ImportAnalyzingScreen(navController: NavController, viewModel: ImportFlowVie
             if (state.analysisError != null) {
                 Text("تعذّر تحليل الملف", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.padding(4.dp))
-                Text(
-                    state.analysisError.orEmpty(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
+                // Selectable: long-press to copy (e.g. the App Check debug token shown in debug builds).
+                SelectionContainer {
+                    Text(
+                        state.analysisError.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
+                    )
+                }
                 Spacer(Modifier.padding(8.dp))
                 Button(onClick = { navController.popBackStack(Destination.ImportSetup.route, inclusive = false) }) {
                     Text("العودة والمحاولة مرة أخرى")

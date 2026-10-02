@@ -9,6 +9,11 @@ import com.inventorysmartai.app.domain.model.ImportSourceType
 import com.inventorysmartai.app.domain.model.Supplier
 import com.inventorysmartai.app.domain.repository.ImportApprovalResult
 
+/** Source types the AI extraction path handles — everything else goes through [ImportEngine]'s
+ *  tabular CSV/Excel pipeline. Shared by the ViewModel (which engine to run) and the analyzing screen
+ *  (where to go next). */
+internal val AI_SOURCE_TYPES = setOf(ImportSourceType.PDF, ImportSourceType.IMAGE, ImportSourceType.CAMERA)
+
 /** One shared state for every screen of the import flow (setup -> sheet -> analyzing -> mapping
  *  -> review), so a step back-navigated-to never loses what an earlier step already decided. */
 data class ImportFlowState(

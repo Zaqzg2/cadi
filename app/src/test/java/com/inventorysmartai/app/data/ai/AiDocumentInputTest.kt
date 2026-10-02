@@ -16,6 +16,11 @@ class AiDocumentInputTest {
     private fun riff(format: String): ByteArray =
         "RIFF".toByteArray(Charsets.US_ASCII) + bytes(0x24, 0x00, 0x00, 0x00) + format.toByteArray(Charsets.US_ASCII)
 
+    /** ISO-BMFF header: 4 size bytes, "ftyp", a 4-letter major brand, then padding. */
+    private fun ftyp(brand: String): ByteArray =
+        bytes(0x00, 0x00, 0x00, 0x18) + "ftyp".toByteArray(Charsets.US_ASCII) +
+            brand.toByteArray(Charsets.US_ASCII) + ByteArray(8)
+
     @Test
     fun `recognises JPEG, PNG, PDF and WebP from their first bytes`() {
         assertEquals("image/jpeg", AiDocumentInput.sniffMimeType(jpeg))
@@ -57,5 +62,16 @@ class AiDocumentInputTest {
         assertEquals("[1]", AiDocumentInput.stripCodeFence("```\n[1]\n```"))
         assertEquals("""{"a":1}""", AiDocumentInput.stripCodeFence("  {\"a\":1}  "))
         assertEquals("""{"a":1}""", AiDocumentInput.stripCodeFence("{\"a\":1}"))
+    }
+
+    @Test
+    fun `recognises HEIC and HEIF phone photos but not AVIF or video`() {
+        assertEquals("image/heic", AiDocumentInput.sniffMimeType(ftyp("heic")))
+        assertEquals("image/heic", AiDocumentInput.sniffMimeType(ftyp("HEIX")))
+        assertEquals("image/heif", AiDocumentInput.sniffMimeType(ftyp("mif1")))
+        assertNull(AiDocumentInput.sniffMimeType(ftyp("avif")))
+        assertNull(AiDocumentInput.sniffMimeType(ftyp("isom")))
+        assertNull(AiDocumentInput.sniffMimeType(ftyp("mp42")))
+        assertEquals("image/heic", AiDocumentInput.resolveMimeType(ftyp("heic"), "application/octet-stream"))
     }
 }

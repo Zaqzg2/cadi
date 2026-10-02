@@ -46,6 +46,9 @@ private val IMPORT_TYPE_MIME_TYPES = arrayOf(
     "application/pdf",
     "image/jpeg",
     "image/png",
+    "image/webp",
+    "image/heic",
+    "image/heif",
     "application/octet-stream"
 )
 

@@ -15,3 +15,6 @@ class AiFileTooLargeException(val sizeBytes: Int, val limitBytes: Int) :
 
 /** The model answered, but not with usable, schema-shaped JSON. */
 class AiInvalidOutputException(message: String) : Exception(message)
+
+/** No answer within [AiConfig.REQUEST_TIMEOUT_MS] — raised so the analysis screen can never spin forever. */
+class AiTimeoutException : Exception("AI request timed out")

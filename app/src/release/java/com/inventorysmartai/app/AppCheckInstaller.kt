@@ -14,4 +14,7 @@ internal object AppCheckInstaller {
     fun install() {
         FirebaseAppCheck.getInstance().installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
     }
+
+    /** Release builds have no debug secret (and never read the log). */
+    fun recentDebugSecret(): String? = null
 }

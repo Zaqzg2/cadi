@@ -11,7 +11,7 @@ object AiDocumentInput {
         fun startsWith(vararg signature: Int): Boolean =
             bytes.size >= signature.size && signature.indices.all { (bytes[it].toInt() and 0xFF) == signature[it] }
 
-        return when {
+        val simple = when {
             startsWith(0xFF, 0xD8, 0xFF) -> "image/jpeg"
             startsWith(0x89, 0x50, 0x4E, 0x47) -> "image/png"
             startsWith(0x25, 0x50, 0x44, 0x46) -> "application/pdf" // "%PDF"
@@ -24,6 +24,26 @@ object AiDocumentInput {
                 (bytes[11].toInt() and 0xFF) == 0x50 -> "image/webp"
             else -> null
         }
+        return simple ?: heifFamilyMimeType(bytes)
+    }
+
+    /**
+     * HEIC / HEIF phone photos, from the ISO-BMFF "ftyp" brand. Other files in the same container family
+     * (AVIF, MP4, MOV, ...) are not images Gemini is sent here, so they stay unrecognised.
+     */
+    private fun heifFamilyMimeType(bytes: ByteArray): String? = when (isoBaseMediaBrand(bytes)) {
+        "heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs" -> "image/heic"
+        "mif1", "msf1" -> "image/heif"
+        else -> null
+    }
+
+    /** The 4-letter major brand of an ISO-BMFF file ("....ftyp" + brand), or null if this is not one. */
+    private fun isoBaseMediaBrand(bytes: ByteArray): String? {
+        if (bytes.size < 12) return null
+        val isFtyp = (bytes[4].toInt() and 0xFF) == 0x66 && (bytes[5].toInt() and 0xFF) == 0x74 &&
+            (bytes[6].toInt() and 0xFF) == 0x79 && (bytes[7].toInt() and 0xFF) == 0x70 // "ftyp"
+        if (!isFtyp) return null
+        return String(bytes, 8, 4, Charsets.ISO_8859_1).lowercase()
     }
 
     /**

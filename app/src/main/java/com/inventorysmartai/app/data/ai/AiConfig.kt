@@ -18,4 +18,10 @@ object AiConfig {
      * photos and PDFs are far smaller.
      */
     const val MAX_INLINE_BYTES = 10 * 1024 * 1024
+
+    /**
+     * Longest the analysis screen waits for Gemini. The SDK's own timeout is far longer, and a call that is
+     * stuck (blocked network, a VPN, App Check retrying) would otherwise leave the spinner up forever.
+     */
+    const val REQUEST_TIMEOUT_MS = 90_000L
 }

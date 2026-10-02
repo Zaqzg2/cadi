@@ -8,8 +8,10 @@ import com.inventorysmartai.app.domain.importing.ai.AiExtractionMapper
 import com.inventorysmartai.app.domain.model.ImportErrorCode
 import com.inventorysmartai.app.domain.repository.AiDocumentImportRepository
 import com.inventorysmartai.app.domain.repository.ImportRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,7 +67,7 @@ class AiDocumentAnalysisEngine @Inject constructor(
             emit(ImportProgress.Analyzing(processed, total))
         }
         emit(ImportProgress.Done(result))
-    }
+    }.flowOn(Dispatchers.Default) // like ImportEngine.analyze: validation/matching must not run on the main thread
 
     private fun ImportType.toAiDocumentType(): AiExtractionDocumentType? = when (this) {
         ImportType.PRODUCTS -> AiExtractionDocumentType.PRODUCTS

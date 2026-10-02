@@ -13,16 +13,19 @@ import com.google.firebase.ai.type.QuotaExceededException
 import com.google.firebase.ai.type.RequestTimeoutException
 import com.google.firebase.ai.type.ResponseStoppedException
 import com.google.firebase.ai.type.SerializationException
-import com.google.firebase.ai.type.ServerException
 import com.google.firebase.ai.type.ServiceDisabledException
 import com.google.firebase.ai.type.UnsupportedUserLocationException
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
+import com.inventorysmartai.app.AppCheckInstaller
+import com.inventorysmartai.app.BuildConfig
 import com.inventorysmartai.app.data.ai.AiConfig
+import com.inventorysmartai.app.data.ai.AppCheckDiagnostics
 import com.inventorysmartai.app.data.ai.AiDocumentInput
 import com.inventorysmartai.app.data.ai.AiFileTooLargeException
 import com.inventorysmartai.app.data.ai.AiInvalidOutputException
 import com.inventorysmartai.app.data.ai.AiNotConfiguredException
+import com.inventorysmartai.app.data.ai.AiTimeoutException
 import com.inventorysmartai.app.data.ai.ExtractionSchemas
 import com.inventorysmartai.app.data.ai.toFirebaseSchema
 import com.inventorysmartai.app.data.remote.BackendFailure
@@ -31,6 +34,9 @@ import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocumentType
 import com.inventorysmartai.app.domain.repository.AiDocumentImportRepository
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.IOException
 import java.io.InterruptedIOException
 import javax.inject.Inject
@@ -72,7 +78,14 @@ class FirebaseAiDocumentImportRepositoryImpl @Inject constructor(
             throw e
         } catch (e: Exception) {
             logFailure(e)
-            Result.failure(e.toBackendFailure())
+            // Only for an App Check rejection, and only in debug builds (release returns null): look for
+            // the debug secret in this app's own log so the error screen can show it.
+            val debugSecret = if (AppCheckDiagnostics.isAppCheckRejection(e)) {
+                withContext(Dispatchers.IO) { AppCheckInstaller.recentDebugSecret() }
+            } else {
+                null
+            }
+            Result.failure(e.toBackendFailure(debugSecret))
         }
     }
 
@@ -101,8 +114,12 @@ class FirebaseAiDocumentImportRepositoryImpl @Inject constructor(
             text(ExtractionSchemas.instructionFor(documentType))
         }
 
-        val text = model.generateContent(request).text
-            ?: throw AiInvalidOutputException("Gemini returned no text")
+        // Bounded: a stuck request (blocked network, VPN, App Check retrying) must end in a message, not a
+        // spinner. withTimeoutOrNull (not withTimeout) so the timeout is a value, never a CancellationException
+        // that the caller's handler would rethrow silently.
+        val response = withTimeoutOrNull(AiConfig.REQUEST_TIMEOUT_MS) { model.generateContent(request) }
+            ?: throw AiTimeoutException()
+        val text = response.text ?: throw AiInvalidOutputException("Gemini returned no text")
         return parseDocument(AiDocumentInput.stripCodeFence(text))
     }
 
@@ -126,9 +143,15 @@ class FirebaseAiDocumentImportRepositoryImpl @Inject constructor(
     }
 }
 
-/** The single place any failure of the AI path becomes a user-facing Arabic [BackendFailure]. */
-internal fun Throwable.toBackendFailure(): BackendFailure {
+/**
+ * The single place any failure of the AI path becomes a user-facing Arabic [BackendFailure].
+ * [debugSecret] is the App Check debug secret found in the app's own log (debug builds), if any.
+ */
+internal fun Throwable.toBackendFailure(debugSecret: String? = null): BackendFailure {
     if (this is BackendFailure) return this
+    // First, by message: every App Check refusal from Firebase AI Logic says so in its text, whichever
+    // exception class the SDK wraps it in.
+    if (AppCheckDiagnostics.isAppCheckRejection(this)) return appCheckFailure(debugSecret)
     return when (this) {
         is AiNotConfiguredException -> BackendFailure.Structured(
             "AI_NOT_CONFIGURED",
@@ -138,6 +161,7 @@ internal fun Throwable.toBackendFailure(): BackendFailure {
             "AI_FILE_TOO_LARGE",
             "حجم الملف كبير جدًا للتحليل بالذكاء الاصطناعي (الحد الأقصى ${limitBytes / (1024 * 1024)} ميغابايت). جرّب صورة أصغر أو قسّم الملف."
         )
+        is AiTimeoutException, is RequestTimeoutException -> timeoutFailure()
         is AiInvalidOutputException, is SerializationException -> BackendFailure.Structured(
             "AI_INVALID_OUTPUT",
             "لم يُرجع الذكاء الاصطناعي نتيجة صالحة. جرّب مستندًا أوضح أو أعد المحاولة."
@@ -145,10 +169,6 @@ internal fun Throwable.toBackendFailure(): BackendFailure {
         is QuotaExceededException -> BackendFailure.Structured(
             "AI_QUOTA_EXCEEDED",
             "تم تجاوز حدّ استخدام الذكاء الاصطناعي مؤقتًا، حاول بعد قليل."
-        )
-        is RequestTimeoutException -> BackendFailure.Structured(
-            "AI_TIMEOUT",
-            "انتهت مهلة الاتصال بخدمة الذكاء الاصطناعي، حاول مرة أخرى."
         )
         is ServiceDisabledException -> BackendFailure.Structured(
             "AI_SERVICE_DISABLED",
@@ -166,38 +186,47 @@ internal fun Throwable.toBackendFailure(): BackendFailure {
             "AI_CONTENT_BLOCKED",
             "رفض نموذج الذكاء الاصطناعي معالجة هذا المستند. جرّب صورة أو ملفًا آخر."
         )
-        is ServerException -> serverFailure()
         else -> {
             val chain = generateSequence<Throwable>(this) { it.cause }.toList()
             when {
-                chain.any { it is InterruptedIOException } -> BackendFailure.Structured(
-                    "AI_TIMEOUT",
-                    "انتهت مهلة الاتصال بخدمة الذكاء الاصطناعي، حاول مرة أخرى."
-                )
+                chain.any { it is InterruptedIOException } -> timeoutFailure()
                 chain.any { it is IOException } -> BackendFailure.NetworkUnavailable(this)
-                else -> BackendFailure.Unknown(this)
+                else -> BackendFailure.Structured(
+                    "AI_ERROR",
+                    "تعذّر استخراج البيانات بالذكاء الاصطناعي (${this.javaClass.simpleName}: ${this.message.orEmpty().take(160)})"
+                )
             }
         }
     }
 }
 
+private fun timeoutFailure(): BackendFailure = BackendFailure.Structured(
+    "AI_TIMEOUT",
+    "انتهت مهلة الاتصال بخدمة الذكاء الاصطناعي، تحقق من الإنترنت (وأوقف الـ VPN إن وُجد) ثم حاول مرة أخرى."
+)
+
 /**
- * A rejected request is, on a fresh setup, almost always App Check: enforcement is on by default (since
- * July 2026) and the debug build's token must be registered once. That case gets its own actionable
- * message; anything else from the server gets the generic one.
+ * App Check is enforced for Firebase AI Logic (and from 2 Nov 2026 enforcement cannot be turned off), so
+ * on a fresh setup this is the expected first failure. In a debug build the message carries what is
+ * needed to fix it, including the debug secret when it could be found; in release it points at Play
+ * Integrity instead.
  */
-private fun ServerException.serverFailure(): BackendFailure {
-    val text = message.orEmpty()
-    return if (text.contains("App Check", ignoreCase = true) || text.contains("appcheck", ignoreCase = true)) {
-        BackendFailure.Structured(
-            "AI_APP_CHECK_REJECTED",
-            "رفضت Firebase الطلب بسبب App Check. في نسخة التطوير: شغّل التطبيق وانسخ «debug secret» من Logcat " +
-                "(الوسم DebugAppCheckProvider) وسجّله في Firebase Console ← App Check ← Manage debug tokens."
-        )
+private fun appCheckFailure(debugSecret: String?): BackendFailure {
+    val message = if (BuildConfig.DEBUG) {
+        buildString {
+            append("رفضت Firebase الطلب لأن App Check لم يتحقق من هذا التطبيق.\n")
+            append("1) Firebase Console ← Security ← App Check ← تبويب APIs ← Firebase AI Logic ← Set up ← Enforced.\n")
+            append("2) تبويب Apps ← التطبيق الذي ينتهي بـ .debug ← ⋮ ← Manage debug tokens ← Add debug token ← الصق الرمز واحفظ.\n")
+            if (debugSecret != null) {
+                append("\nالرمز:\n").append(debugSecret).append("\n")
+                append("(اضغط مطوّلًا على الرمز لنسخه. لا تشارك لقطة هذه الشاشة مع أحد.)")
+            } else {
+                append("\nلم أجد الرمز في سجل التطبيق (يُطبع عند أول تشغيل بعد التثبيت فقط): احذف التطبيق وثبّته من جديد ")
+                append("ثم أعد المحاولة، أو اقرأه من Logcat (الوسم DebugAppCheckProvider).")
+            }
+        }
     } else {
-        BackendFailure.Structured(
-            "AI_SERVER_ERROR",
-            "خدمة الذكاء الاصطناعي غير متاحة حاليًا أو رفضت الطلب، حاول بعد قليل."
-        )
+        "فشل التحقق من التطبيق (App Check). تأكد أن مزوّد Play Integrity مفعّل في Firebase وأن التطبيق مثبّت من Google Play."
     }
+    return BackendFailure.Structured("AI_APP_CHECK_REJECTED", message)
 }

@@ -40,6 +40,25 @@ android {
         buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"CHANGE-ME.apps.googleusercontent.com\"")
     }
 
+    // A FIXED debug signing key. Without it every CI run signs the debug APK with a freshly generated key,
+    // so a new APK can never be installed over the previous one — you must uninstall first, which wipes
+    // the app's data (the local database) and its Firebase App Check debug token, forcing a new token to
+    // be registered after every build. This is the conventional shared debug key (alias "androiddebugkey",
+    // password "android"), not a secret, and it signs debug builds only. If the file is missing the build
+    // falls back to Android's per-machine default, exactly as before. The first build with it must be
+    // installed after uninstalling the old one once (the signatures differ); after that, updates keep data.
+    signingConfigs {
+        getByName("debug") {
+            val sharedDebugKey = file("debug.keystore")
+            if (sharedDebugKey.exists()) {
+                storeFile = sharedDebugKey
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
