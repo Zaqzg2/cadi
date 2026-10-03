@@ -25,6 +25,13 @@
         android:theme="@style/Theme.InventorySmartAI"
         tools:targetApi="31">
 
+        <!-- Pre-downloads Google's barcode-scanner module at install time. Without it the module is
+             fetched on the first scan, which fails offline / on devices where Play services is
+             still updating — the scan screen then never opens and nothing seems to happen. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

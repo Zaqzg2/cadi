@@ -37,4 +37,18 @@ interface ProductDao {
 
     @Delete
     suspend fun delete(product: ProductEntity)
+
+    /** Lines in counts / purchase requests / receipts / sales invoices that point at this product.
+     *  Those foreign keys are RESTRICT, so a product with any reference cannot be hard-deleted. */
+    @Query(
+        """SELECT
+            (SELECT COUNT(*) FROM inventory_count_items WHERE productId = :id) +
+            (SELECT COUNT(*) FROM purchase_request_items WHERE productId = :id) +
+            (SELECT COUNT(*) FROM purchase_receipt_items WHERE productId = :id) +
+            (SELECT COUNT(*) FROM sales_invoice_items WHERE productId = :id)"""
+    )
+    suspend fun documentReferenceCount(id: Long): Int
+
+    @Query("UPDATE products SET isActive = :active, updatedAt = :now WHERE id = :id")
+    suspend fun setActive(id: Long, active: Boolean, now: Long)
 }

@@ -136,7 +136,10 @@ fun AppNavHost() {
 
             composable(
                 Destination.ManualEntry.route,
-                arguments = listOf(navArgument(Destination.ManualEntry.ARG_BARCODE) { type = NavType.StringType; defaultValue = "" })
+                arguments = listOf(
+                    navArgument(Destination.ManualEntry.ARG_BARCODE) { type = NavType.StringType; defaultValue = "" },
+                    navArgument(Destination.ManualEntry.ARG_PRODUCT_ID) { type = NavType.LongType; defaultValue = Destination.ManualEntry.NO_PRODUCT }
+                )
             ) { ManualEntryScreen(navController) }
 
             composable(

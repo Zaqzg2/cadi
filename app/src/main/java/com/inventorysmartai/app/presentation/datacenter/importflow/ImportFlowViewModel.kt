@@ -212,12 +212,13 @@ class ImportFlowViewModel @Inject constructor(
         importType: ImportType,
         jobId: Long,
         mappingOverride: ColumnMappingResult?
-    ) {
+    ): Boolean {
+        var succeeded = false
         val progressFlow = if (sourceType in AI_SOURCE_TYPES) {
             val sessionId = deviceSessionRepository.getSessionId()
             val bytes = runCatching { file.inputStream().use { it.readBytes() } }.getOrElse { e ->
                 update { it.copy(isBusy = false, analysisError = "تعذّر قراءة الملف: ${e.message ?: e.javaClass.simpleName}") }
-                return
+                return false
             }
             aiDocumentAnalysisEngine.analyzeDocument(bytes, file.mimeType ?: "application/octet-stream", importType, jobId, sessionId)
         } else {
@@ -247,9 +248,11 @@ class ImportFlowViewModel @Inject constructor(
                     importRepository.persistAnalysis(jobId, progress.result)
                     update { it.copy(isBusy = false) }
                     beginReviewObservation(jobId)
+                    succeeded = true
                 }
             }
         }
+        return succeeded
     }
 
     // ---- Step: column mapping ----
@@ -267,7 +270,7 @@ class ImportFlowViewModel @Inject constructor(
 
     /** Re-runs steps 4-9 with the (possibly human-edited) mapping applied, so validation/
      *  matching/duplicate-detection reflect the final mapping rather than the auto-suggestion. */
-    fun confirmColumnMapping() {
+    fun confirmColumnMapping(onDone: () -> Unit = {}) {
         val file = openedFile ?: return
         val current = _state.value
         val sourceType = current.detectedSourceType ?: return
@@ -277,7 +280,14 @@ class ImportFlowViewModel @Inject constructor(
 
         viewModelScope.launch {
             update { it.copy(isBusy = true) }
-            runAnalysis(file, sourceType, importType, jobId, mappingOverride = mapping)
+            // Navigation to the review screen happens ONLY after the re-analysis has been persisted;
+            // before, the screen navigated immediately and showed the previous (stale/empty) rows.
+            val ok = runAnalysis(file, sourceType, importType, jobId, mappingOverride = mapping)
+            if (ok) {
+                onDone()
+            } else {
+                update { it.copy(isBusy = false, snackbarMessage = it.analysisError ?: "تعذّر إعادة التحليل") }
+            }
         }
     }
 
@@ -343,9 +353,13 @@ class ImportFlowViewModel @Inject constructor(
         }
     }
 
-    fun cancelImport() {
-        val jobId = _state.value.jobId ?: return
-        viewModelScope.launch { importRepository.cancelJob(jobId) }
+    fun cancelImport(onDone: () -> Unit = {}) {
+        val jobId = _state.value.jobId
+        if (jobId == null) { onDone(); return }
+        viewModelScope.launch {
+            runCatching { importRepository.cancelJob(jobId) }
+            onDone()
+        }
     }
 
     fun consumeSnackbar() = update { it.copy(snackbarMessage = null) }

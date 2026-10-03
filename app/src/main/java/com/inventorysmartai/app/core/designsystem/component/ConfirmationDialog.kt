@@ -27,3 +27,29 @@ fun ActionConfirmationDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
     )
 }
+
+/**
+ * Confirmation for destructive / hard-to-undo actions (delete, reject-all, cancel import). The
+ * confirm button is drawn in the error colour so it is visibly different from a normal "تأكيد".
+ * Use this instead of acting immediately — every delete in the app used to fire on first tap.
+ */
+@Composable
+fun DestructiveConfirmDialog(
+    title: String,
+    message: String,
+    confirmLabel: String = "حذف",
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirmLabel, color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }
+    )
+}

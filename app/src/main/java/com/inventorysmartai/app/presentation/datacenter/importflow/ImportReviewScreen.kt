@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -39,7 +40,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.inventorysmartai.app.core.designsystem.component.ActionConfirmationDialog
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
+import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
 import com.inventorysmartai.app.core.designsystem.component.StatCard
 import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.importing.ImportField
@@ -60,6 +63,9 @@ fun ImportReviewScreen(navController: NavController, viewModel: ImportFlowViewMo
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var editingRow by remember { mutableStateOf<ImportRow?>(null) }
+    var confirmRejectAll by remember { mutableStateOf(false) }
+    var confirmApprove by remember { mutableStateOf(false) }
+    var confirmCancel by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.snackbarMessage) {
         state.snackbarMessage?.let {
@@ -72,7 +78,17 @@ fun ImportReviewScreen(navController: NavController, viewModel: ImportFlowViewMo
     val result = state.approvalResult
 
     Scaffold(
-        topBar = { AppTopBar(title = "مراجعة الاستيراد", onBack = { navController.popBackStack() }) },
+        topBar = {
+            AppTopBar(
+                title = "مراجعة الاستيراد",
+                onBack = { navController.popBackStack() },
+                actions = {
+                    if (result == null) {
+                        TextButton(onClick = { confirmCancel = true }) { Text("إلغاء الاستيراد") }
+                    }
+                }
+            )
+        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         if (result != null) {
@@ -121,7 +137,7 @@ fun ImportReviewScreen(navController: NavController, viewModel: ImportFlowViewMo
                         OutlinedButton(onClick = { viewModel.onAcceptAllValid() }, modifier = Modifier.weight(1f)) {
                             Text("قبول المطابقات الأكيدة")
                         }
-                        OutlinedButton(onClick = { viewModel.onRejectAll() }, modifier = Modifier.weight(1f)) {
+                        OutlinedButton(onClick = { confirmRejectAll = true }, modifier = Modifier.weight(1f)) {
                             Text("رفض الكل")
                         }
                     }
@@ -142,13 +158,46 @@ fun ImportReviewScreen(navController: NavController, viewModel: ImportFlowViewMo
             }
 
             Button(
-                onClick = { viewModel.approveImport() },
+                onClick = { confirmApprove = true },
                 enabled = !state.isBusy && state.reviewRows.any { it.status == ImportRowStatus.ACCEPTED },
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             ) {
                 Text("اعتماد الاستيراد")
             }
         }
+    }
+
+    if (confirmRejectAll) {
+        DestructiveConfirmDialog(
+            title = "رفض كل الصفوف؟",
+            message = "سيتم رفض جميع الصفوف (${state.reviewRows.size}) ويمكنك قبول ما تريد منها بعد ذلك صفًا صفًا.",
+            confirmLabel = "رفض الكل",
+            onConfirm = { confirmRejectAll = false; viewModel.onRejectAll() },
+            onDismiss = { confirmRejectAll = false }
+        )
+    }
+    if (confirmApprove) {
+        val acceptedCount = state.reviewRows.count { it.status == ImportRowStatus.ACCEPTED }
+        ActionConfirmationDialog(
+            title = "اعتماد الاستيراد",
+            actionDescriptionAr = "سيتم حفظ $acceptedCount صفًا مقبولًا في قاعدة البيانات، وتجاهل الباقي. هل تريد المتابعة؟",
+            onConfirm = { confirmApprove = false; viewModel.approveImport() },
+            onDismiss = { confirmApprove = false }
+        )
+    }
+    if (confirmCancel) {
+        DestructiveConfirmDialog(
+            title = "إلغاء الاستيراد؟",
+            message = "لن يتم حفظ أي شيء من هذا الملف، وسيُسجَّل الاستيراد كملغى.",
+            confirmLabel = "إلغاء الاستيراد",
+            onConfirm = {
+                confirmCancel = false
+                viewModel.cancelImport {
+                    navController.popBackStack(Destination.DataCenter.route, inclusive = false)
+                }
+            },
+            onDismiss = { confirmCancel = false }
+        )
     }
 
     editingRow?.let { row ->
@@ -229,13 +278,20 @@ private fun EditRowDialog(
         onDismissRequest = onDismiss,
         title = { Text("تعديل الصف") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 editableFields.forEach { field ->
                     OutlinedTextField(
                         value = values.value[field].orEmpty(),
                         onValueChange = { newValue -> values.value = values.value + (field to newValue) },
                         label = { Text(field.labelAr) },
                         singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = if (field.isNumeric) androidx.compose.ui.text.input.KeyboardType.Decimal
+                            else androidx.compose.ui.text.input.KeyboardType.Text
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }

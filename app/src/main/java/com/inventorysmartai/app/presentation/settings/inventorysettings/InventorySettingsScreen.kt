@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.settings.inventorysettings
 
+import com.inventorysmartai.app.core.common.toDecimalOrNull
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,7 +49,7 @@ fun InventorySettingsScreen(navController: NavController, viewModel: InventorySe
                     )
                     OutlinedTextField(
                         value = windowText,
-                        onValueChange = { windowText = it; it.toIntOrNull()?.let(viewModel::onNearExpiryWindowChanged) },
+                        onValueChange = { windowText = it; it.toDecimalOrNull()?.toInt()?.let(viewModel::onNearExpiryWindowChanged) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true
                     )
@@ -64,8 +65,8 @@ fun InventorySettingsScreen(navController: NavController, viewModel: InventorySe
                     )
                     OutlinedTextField(
                         value = thresholdText,
-                        onValueChange = { thresholdText = it; it.toDoubleOrNull()?.let(viewModel::onDefaultLowStockThresholdChanged) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        onValueChange = { thresholdText = it; it.toDecimalOrNull()?.let(viewModel::onDefaultLowStockThresholdChanged) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true
                     )
                 }

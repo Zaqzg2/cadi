@@ -54,23 +54,66 @@ class CatalogViewModel @Inject constructor(
         }
     }
 
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+    fun onMessageShown() { _message.value = null }
+
+    /** Names currently listed, for duplicate checks (compared trimmed + case-insensitive). */
+    private fun currentNames(exceptId: Long? = null): List<String> =
+        ((_uiState.value as? UiState.Success)?.data ?: emptyList())
+            .filter { it.id != exceptId }
+            .map { it.name.trim().lowercase() }
+
     fun onAdd(name: String) {
-        if (name.isBlank()) return
+        val clean = name.trim()
+        if (clean.isEmpty()) { _message.value = "الاسم مطلوب"; return }
+        if (clean.lowercase() in currentNames()) { _message.value = "الاسم \"$clean\" موجود مسبقًا"; return }
         viewModelScope.launch {
-            when (kind) {
-                CatalogKind.BRANCH -> catalogRepository.upsertBranch(Branch(name = name))
-                CatalogKind.CATEGORY -> catalogRepository.upsertCategory(Category(name = name))
-                CatalogKind.UNIT -> catalogRepository.upsertUnit(UnitOfMeasure(name = name))
-            }
+            runCatching {
+                when (kind) {
+                    CatalogKind.BRANCH -> catalogRepository.upsertBranch(Branch(name = clean))
+                    CatalogKind.CATEGORY -> catalogRepository.upsertCategory(Category(name = clean))
+                    CatalogKind.UNIT -> catalogRepository.upsertUnit(UnitOfMeasure(name = clean))
+                }
+            }.onFailure { _message.value = "تعذّرت الإضافة: ${it.message ?: it.javaClass.simpleName}" }
         }
     }
 
+    fun onRename(id: Long, newName: String) {
+        val clean = newName.trim()
+        if (clean.isEmpty()) { _message.value = "الاسم مطلوب"; return }
+        if (clean.lowercase() in currentNames(exceptId = id)) { _message.value = "الاسم \"$clean\" موجود مسبقًا"; return }
+        viewModelScope.launch {
+            runCatching {
+                when (kind) {
+                    CatalogKind.BRANCH -> catalogRepository.renameBranch(id, clean)
+                    CatalogKind.CATEGORY -> catalogRepository.renameCategory(id, clean)
+                    CatalogKind.UNIT -> catalogRepository.renameUnit(id, clean)
+                }
+            }.onFailure { _message.value = "تعذّر التعديل: ${it.message ?: it.javaClass.simpleName}" }
+        }
+    }
+
+    /** How many records depend on this item — used by the delete confirmation text. */
+    suspend fun usageCount(id: Long): Int = runCatching {
+        when (kind) {
+            CatalogKind.BRANCH -> catalogRepository.branchUsageCount(id)
+            CatalogKind.CATEGORY -> catalogRepository.categoryUsageCount(id)
+            CatalogKind.UNIT -> catalogRepository.unitUsageCount(id)
+        }
+    }.getOrDefault(0)
+
     fun onDelete(id: Long) {
         viewModelScope.launch {
-            when (kind) {
-                CatalogKind.BRANCH -> catalogRepository.deleteBranch(id)
-                CatalogKind.CATEGORY -> catalogRepository.deleteCategory(id)
-                CatalogKind.UNIT -> catalogRepository.deleteUnit(id)
+            runCatching {
+                when (kind) {
+                    CatalogKind.BRANCH -> catalogRepository.deleteBranch(id)
+                    CatalogKind.CATEGORY -> catalogRepository.deleteCategory(id)
+                    CatalogKind.UNIT -> catalogRepository.deleteUnit(id)
+                }
+            }.onFailure {
+                // e.g. a branch referenced by purchases/sales/counts (FK RESTRICT) — used to crash the app.
+                _message.value = "لا يمكن الحذف لأن هذا العنصر مرتبط بعمليات سابقة (مشتريات / مبيعات / جرد)"
             }
         }
     }

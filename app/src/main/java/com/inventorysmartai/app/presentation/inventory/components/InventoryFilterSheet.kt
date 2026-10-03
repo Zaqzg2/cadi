@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.inventorysmartai.app.domain.model.Branch
 import com.inventorysmartai.app.domain.model.Category
 import com.inventorysmartai.app.domain.model.SortOrder
+import com.inventorysmartai.app.presentation.common.PickerItem
+import com.inventorysmartai.app.presentation.common.SelectField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,33 +35,23 @@ fun InventoryFilterSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("الفرع", style = MaterialTheme.typography.titleSmall)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    FilterChip(selected = selectedBranchId == null, onClick = { onBranchSelected(null) }, label = { Text("الكل") })
-                }
-                items(branches) { branch ->
-                    FilterChip(
-                        selected = selectedBranchId == branch.id,
-                        onClick = { onBranchSelected(branch.id) },
-                        label = { Text(branch.name) }
-                    )
-                }
-            }
-
-            Text("التصنيف", style = MaterialTheme.typography.titleSmall)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    FilterChip(selected = selectedCategoryId == null, onClick = { onCategorySelected(null) }, label = { Text("الكل") })
-                }
-                items(categories) { category ->
-                    FilterChip(
-                        selected = selectedCategoryId == category.id,
-                        onClick = { onCategorySelected(category.id) },
-                        label = { Text(category.name) }
-                    )
-                }
-            }
+            // Pop-up pickers with search: a chip row stops being usable past ~10 branches/categories.
+            SelectField(
+                label = "الفرع",
+                items = branches.map { PickerItem(it.id, it.name) },
+                selectedId = selectedBranchId,
+                onSelected = onBranchSelected,
+                placeholder = "كل الفروع",
+                modifier = Modifier.fillMaxWidth()
+            )
+            SelectField(
+                label = "التصنيف",
+                items = categories.map { PickerItem(it.id, it.name) },
+                selectedId = selectedCategoryId,
+                onSelected = onCategorySelected,
+                placeholder = "كل التصنيفات",
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Text("الترتيب", style = MaterialTheme.typography.titleSmall)
             val sortOptions = listOf(

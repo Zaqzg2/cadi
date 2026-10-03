@@ -162,8 +162,6 @@ class ImportRepositoryImpl @Inject constructor(
         val now = System.currentTimeMillis()
         // Replace, not append (see interface doc) — re-analyzing (a different sheet, a changed
         // column mapping) must not leave the previous attempt's rows lying around alongside it.
-        importDao.deleteRowsForJob(jobId)
-
         val entities = analysis.analyses.map { rowAnalysis ->
             val row = rowAnalysis.row
             val storageMap = row.fields.entries.associate { (field, value) -> field.name to value.forStorage(field) }
@@ -183,9 +181,13 @@ class ImportRepositoryImpl @Inject constructor(
                 warningsJson = if (warnings.isEmpty()) null else SimpleJson.encodeList(warnings)
             )
         }
-        importDao.insertRows(entities)
-
         val statuses = analysis.analyses.map { it.resolvedStatus() }
+        // One transaction: delete + insert + counts. Observers (the review screen) previously saw an
+        // intermediate EMPTY list between the delete and the insert — a visible flicker, and a stale
+        // read if the user acted in between.
+        database.withTransaction {
+        importDao.deleteRowsForJob(jobId)
+        importDao.insertRows(entities)
         importDao.updateJobCounts(
             jobId = jobId,
             status = ImportJobStatus.REVIEW_REQUIRED.name,
@@ -198,6 +200,7 @@ class ImportRepositoryImpl @Inject constructor(
             errorRows = statuses.count { it == ImportRowStatus.ERROR },
             updatedAt = now
         )
+        }
     }
 
     override suspend fun cancelJob(jobId: Long) {

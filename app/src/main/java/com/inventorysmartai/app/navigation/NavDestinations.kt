@@ -66,11 +66,14 @@ sealed class Destination(val route: String) {
         fun createRoute(jobId: Long) = "data_center/import_history/detail/$jobId"
     }
 
-    /** Manual product entry; [barcode] pre-fills the barcode field (set when a scan found no match). */
-    data object ManualEntry : Destination("data_center/manual_entry?barcode={barcode}") {
+    /** Manual product entry; [barcode] pre-fills the barcode field (set when a scan found no match).
+     *  With a [productId] the same form EDITS that product instead of creating one. */
+    data object ManualEntry : Destination("data_center/manual_entry?barcode={barcode}&productId={productId}") {
         const val ARG_BARCODE = "barcode"
-        fun createRoute(barcode: String? = null) =
-            "data_center/manual_entry?barcode=${android.net.Uri.encode(barcode.orEmpty())}"
+        const val ARG_PRODUCT_ID = "productId"
+        const val NO_PRODUCT = -1L
+        fun createRoute(barcode: String? = null, productId: Long? = null) =
+            "data_center/manual_entry?barcode=${android.net.Uri.encode(barcode.orEmpty())}&productId=${productId ?: NO_PRODUCT}"
     }
 
     data object PartyList : Destination("data_center/parties/{kind}") {

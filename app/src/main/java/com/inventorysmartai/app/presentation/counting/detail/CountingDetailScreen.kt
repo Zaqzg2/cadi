@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.counting.detail
 
+import com.inventorysmartai.app.core.common.toDecimalOrNull
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -93,12 +94,12 @@ fun CountingDetailScreen(navController: NavController, viewModel: CountingDetail
                                         value = row.actualQuantity,
                                         onValueChange = { viewModel.onActualQuantityChange(row.productId, it) },
                                         label = { Text("الكمية الفعلية") },
-                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         modifier = Modifier.weight(1f),
                                         singleLine = true
                                     )
                                 }
-                                val difference = (row.actualQuantity.toDoubleOrNull() ?: row.systemQuantity) - row.systemQuantity
+                                val difference = (row.actualQuantity.toDecimalOrNull() ?: row.systemQuantity) - row.systemQuantity
                                 Text(
                                     "الفرق: ${if (difference >= 0) "+" else ""}${Formatters.formatNumber(difference)}",
                                     style = MaterialTheme.typography.labelMedium,

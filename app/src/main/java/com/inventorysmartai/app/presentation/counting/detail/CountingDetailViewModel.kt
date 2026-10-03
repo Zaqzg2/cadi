@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.counting.detail
 
+import com.inventorysmartai.app.core.common.toDecimalOrNull
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -133,7 +134,7 @@ class CountingDetailViewModel @Inject constructor(
                         InventoryCountItem(
                             productId = it.productId,
                             systemQuantity = it.systemQuantity,
-                            actualQuantity = it.actualQuantity.toDoubleOrNull() ?: it.systemQuantity,
+                            actualQuantity = it.actualQuantity.toDecimalOrNull() ?: it.systemQuantity,
                             notes = it.notes.ifBlank { null }
                         )
                     }

@@ -91,7 +91,7 @@ fun SalesDetailScreen(navController: NavController, viewModel: SalesDetailViewMo
                                         value = row.quantity,
                                         onValueChange = { viewModel.onQuantityChange(row.productId, it) },
                                         label = { Text("الكمية") },
-                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         modifier = Modifier.weight(1f),
                                         singleLine = true
                                     )
@@ -99,7 +99,7 @@ fun SalesDetailScreen(navController: NavController, viewModel: SalesDetailViewMo
                                         value = row.unitPrice,
                                         onValueChange = { viewModel.onPriceChange(row.productId, it) },
                                         label = { Text("السعر") },
-                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         modifier = Modifier.weight(1f),
                                         singleLine = true
                                     )
@@ -107,7 +107,7 @@ fun SalesDetailScreen(navController: NavController, viewModel: SalesDetailViewMo
                                         value = row.discountPercent,
                                         onValueChange = { viewModel.onDiscountChange(row.productId, it) },
                                         label = { Text("الخصم %") },
-                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         modifier = Modifier.weight(1f),
                                         singleLine = true
                                     )

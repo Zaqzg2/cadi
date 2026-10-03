@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -109,15 +110,24 @@ fun ImportColumnMappingScreen(navController: NavController, viewModel: ImportFlo
 
             Button(
                 onClick = {
-                    viewModel.confirmColumnMapping()
-                    navController.navigate(Destination.ImportReview.route) {
-                        popUpTo(Destination.ImportColumnMapping.route) { inclusive = true }
+                    viewModel.confirmColumnMapping {
+                        navController.navigate(Destination.ImportReview.route) {
+                            popUpTo(Destination.ImportColumnMapping.route) { inclusive = true }
+                        }
                     }
                 },
                 enabled = mapping != null && !state.isBusy,
                 modifier = Modifier.fillMaxWidth().padding(16.dp)
             ) {
-                Text("متابعة إلى التحقق والمطابقة")
+                if (state.isBusy) {
+                    androidx.compose.material3.CircularProgressIndicator(
+                        modifier = Modifier.padding(end = 8.dp).size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Text(state.stageLabel.ifBlank { "جاري التحقق والمطابقة..." })
+                } else {
+                    Text("متابعة إلى التحقق والمطابقة")
+                }
             }
         }
     }

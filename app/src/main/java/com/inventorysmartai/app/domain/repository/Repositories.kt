@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.Flow
 interface ProductRepository {
     fun observeProducts(): Flow<List<Product>>
     fun observeProductsWithStock(): Flow<List<ProductStockSummary>>
+
+    /** Archived products (kept for history, hidden from every other list) so they can be restored. */
+    fun observeArchivedProducts(): Flow<List<ProductStockSummary>>
     fun observeProductDetail(productId: Long): Flow<ProductStockSummary?>
     fun observeMovements(productId: Long): Flow<List<InventoryMovement>>
     suspend fun getByBarcode(barcode: String): Product?
@@ -25,7 +28,25 @@ interface ProductRepository {
      *  opening stock row plus a MANUAL movement. Callers must check barcode/item-number duplicates
      *  first — [upsert] uses REPLACE on unique indexes, so a duplicate would overwrite another product. */
     suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double): Long
+
+    /** Edits an EXISTING product in place (UPDATE, never REPLACE — REPLACE deletes the row first and the
+     *  cascade would wipe its stock and movements). Throws [IllegalArgumentException] when the product
+     *  does not exist or the barcode / item number belongs to a DIFFERENT product. */
+    suspend fun updateProduct(product: Product)
+
+    /** Hard-deletes the products that no document references. Products used by counts / purchases /
+     *  sales cannot be deleted (their history must stay readable): they are returned in
+     *  [ProductDeleteResult.blocked] so the UI can offer to archive them instead. */
+    suspend fun deleteProducts(ids: Collection<Long>): ProductDeleteResult
+
+    /** Archive (false) / restore (true). Archived products keep their history but disappear from lists. */
+    suspend fun setProductsActive(ids: Collection<Long>, active: Boolean)
+
+    /** Number of document lines (counts, purchases, sales) that reference the product. */
+    suspend fun documentReferenceCount(productId: Long): Int
 }
+
+data class ProductDeleteResult(val deleted: Int, val blocked: List<Product>)
 
 interface CatalogRepository {
     fun observeBranches(): Flow<List<Branch>>
@@ -37,6 +58,15 @@ interface CatalogRepository {
     suspend fun deleteBranch(id: Long)
     suspend fun deleteCategory(id: Long)
     suspend fun deleteUnit(id: Long)
+    suspend fun renameBranch(id: Long, name: String)
+    suspend fun renameCategory(id: Long, name: String)
+    suspend fun renameUnit(id: Long, name: String)
+
+    /** How many things would be affected by deleting this item (stock rows for a branch, products for a
+     *  category/unit) — shown in the delete confirmation so the person knows what is lost. */
+    suspend fun branchUsageCount(id: Long): Int
+    suspend fun categoryUsageCount(id: Long): Int
+    suspend fun unitUsageCount(id: Long): Int
 }
 
 interface PartyRepository {

@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.purchases.detail
 
+import com.inventorysmartai.app.core.common.toDecimalOrNull
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -134,7 +135,7 @@ class PurchaseDetailViewModel @Inject constructor(
                         PurchaseRequestItem(
                             productId = it.productId,
                             currentStockSnapshot = it.currentStock,
-                            requestedQuantity = it.requestedQuantity.toDoubleOrNull() ?: 0.0,
+                            requestedQuantity = it.requestedQuantity.toDecimalOrNull() ?: 0.0,
                             receivedQuantity = it.receivedQuantity
                         )
                     }
@@ -156,7 +157,7 @@ class PurchaseDetailViewModel @Inject constructor(
             val lines = items.value.map { row ->
                 PurchaseReceiptLine(
                     productId = row.productId,
-                    quantity = ((row.requestedQuantity.toDoubleOrNull() ?: 0.0) - row.receivedQuantity).coerceAtLeast(0.0)
+                    quantity = ((row.requestedQuantity.toDecimalOrNull() ?: 0.0) - row.receivedQuantity).coerceAtLeast(0.0)
                 )
             }
             purchaseRepository.receive(

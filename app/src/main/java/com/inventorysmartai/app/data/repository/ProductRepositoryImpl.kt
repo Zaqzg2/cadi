@@ -17,6 +17,7 @@ import com.inventorysmartai.app.domain.model.InventoryMovement
 import com.inventorysmartai.app.domain.model.MovementType
 import com.inventorysmartai.app.domain.model.Product
 import com.inventorysmartai.app.domain.model.ProductStockSummary
+import com.inventorysmartai.app.domain.repository.ProductDeleteResult
 import com.inventorysmartai.app.domain.repository.ProductRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -35,16 +36,27 @@ class ProductRepositoryImpl @Inject constructor(
     private val settings: SettingsLocalDataSource
 ) : ProductRepository {
 
-    override fun observeProducts(): Flow<List<Product>> =
+    /** Every product, archived or not, with category/unit names resolved. */
+    private fun observeAllProducts(): Flow<List<Product>> =
         combine(productDao.observeAll(), categoryDao.observeAll(), unitDao.observeAll()) { products, categories, units ->
             val categoryNames = categories.associate { it.id to it.name }
             val unitNames = units.associate { it.id to it.name }
             products.map { it.toDomain(categoryNames[it.categoryId], unitNames[it.unitId]) }
         }
 
+    /** ACTIVE products only — every picker, report, dashboard and the assistant want exactly this. */
+    override fun observeProducts(): Flow<List<Product>> =
+        observeAllProducts().map { list -> list.filter { it.isActive } }
+
+    override fun observeArchivedProducts(): Flow<List<ProductStockSummary>> =
+        observeSummaries(active = false)
+
     override fun observeProductsWithStock(): Flow<List<ProductStockSummary>> =
+        observeSummaries(active = true)
+
+    private fun observeSummaries(active: Boolean): Flow<List<ProductStockSummary>> =
         combine(
-            observeProducts(),
+            observeAllProducts().map { list -> list.filter { it.isActive == active } },
             inventoryDao.observeAll(),
             branchDao.observeAll(),
             settings.nearExpiryWindowDays
@@ -150,6 +162,58 @@ class ProductRepositoryImpl @Inject constructor(
         return productId
     }
 
+    override suspend fun updateProduct(product: Product) {
+        require(product.id != 0L) { "الصنف غير موجود" }
+        val existing = productDao.getById(product.id) ?: throw IllegalArgumentException("الصنف غير موجود")
+        product.barcode?.takeIf { it.isNotBlank() }?.let { code ->
+            val other = productDao.getByBarcode(code)
+            require(other == null || other.id == product.id) { "الباركود مسجّل مسبقًا لصنف آخر" }
+        }
+        product.itemNumber?.takeIf { it.isNotBlank() }?.let { number ->
+            val other = productDao.getByItemNumber(number)
+            require(other == null || other.id == product.id) { "رقم الصنف مسجّل مسبقًا لصنف آخر" }
+        }
+        productDao.update(
+            existing.copy(
+                itemNumber = product.itemNumber?.takeIf { it.isNotBlank() },
+                barcode = product.barcode?.takeIf { it.isNotBlank() },
+                name = product.name,
+                normalizedName = ArabicTextNormalizer.normalize(product.name),
+                alternateNames = product.alternateNames,
+                categoryId = product.categoryId,
+                unitId = product.unitId,
+                minStock = product.minStock,
+                reorderPoint = product.reorderPoint,
+                hasExpiry = product.hasExpiry,
+                defaultPrice = product.defaultPrice,
+                isActive = product.isActive,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun deleteProducts(ids: Collection<Long>): ProductDeleteResult {
+        var deleted = 0
+        val blocked = mutableListOf<Product>()
+        for (id in ids.distinct()) {
+            val entity = productDao.getById(id) ?: continue
+            if (productDao.documentReferenceCount(id) > 0) {
+                blocked += entity.toDomain(null, null)
+            } else {
+                productDao.delete(entity) // stock rows + movements go with it (CASCADE)
+                deleted++
+            }
+        }
+        return ProductDeleteResult(deleted, blocked)
+    }
+
+    override suspend fun setProductsActive(ids: Collection<Long>, active: Boolean) {
+        val now = System.currentTimeMillis()
+        ids.distinct().forEach { productDao.setActive(it, active, now) }
+    }
+
+    override suspend fun documentReferenceCount(productId: Long): Int = productDao.documentReferenceCount(productId)
+
     private fun buildSummary(
         product: Product,
         stockRows: List<InventoryEntity>,
@@ -195,5 +259,6 @@ internal fun ProductEntity.toDomain(categoryName: String?, unitName: String?) = 
     reorderPoint = reorderPoint,
     hasExpiry = hasExpiry,
     defaultPrice = defaultPrice,
-    isActive = isActive
+    isActive = isActive,
+    createdAt = createdAt
 )

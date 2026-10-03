@@ -8,13 +8,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Description
@@ -128,23 +124,12 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item { Text("استيراد البيانات", style = MaterialTheme.typography.titleMedium) }
-            item {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    modifier = Modifier.fillMaxWidth().height(260.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(importTiles) { tile ->
+            items(importTiles.chunked(3)) { rowTiles ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    rowTiles.forEach { tile ->
                         Card(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.weight(1f),
                             onClick = {
-                                // Excel/CSV/PDF/image all go through the same real import flow — the
-                                // FileDetector step sniffs the actual file content regardless of
-                                // which tile was tapped, so there's no separate "wrong tile"
-                                // failure mode (a photo picked under "Excel" still takes the AI path).
-                                // PDF and image used to fall through to the "coming later" placeholder
-                                // even though the AI extraction behind them was already built.
                                 when {
                                     tile.type in IMPORT_FLOW_TILE_TYPES -> navController.navigate(Destination.ImportSetup.route)
                                     tile.type == ImportSourceType.BARCODE -> startBarcodeScan(
@@ -166,27 +151,25 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
                             }
                         }
                     }
+                    // keep the last row's tiles the same width as the others
+                    repeat(3 - rowTiles.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
                 }
             }
 
             item { Text("البيانات الأساسية", style = MaterialTheme.typography.titleMedium) }
-            item {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    modifier = Modifier.fillMaxWidth().height(170.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(masterDataTiles) { tile ->
-                        Card(modifier = Modifier.fillMaxWidth(), onClick = { navController.navigate(tile.route) }) {
+            items(masterDataTiles.chunked(3)) { rowTiles ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    rowTiles.forEach { tile ->
+                        Card(modifier = Modifier.weight(1f), onClick = { navController.navigate(tile.route) }) {
                             Column(
-                                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp, horizontal = 12.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(tile.label, style = MaterialTheme.typography.labelMedium)
+                                Text(tile.label, style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
+                    repeat(3 - rowTiles.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
                 }
             }
 

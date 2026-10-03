@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.sales.detail
 
+import com.inventorysmartai.app.core.common.toDecimalOrNull
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -34,7 +35,7 @@ data class SalesItemRow(
     val discountPercent: String = "0"
 ) {
     val lineTotal: Double get() =
-        (quantity.toDoubleOrNull() ?: 0.0) * (unitPrice.toDoubleOrNull() ?: 0.0) * (1 - (discountPercent.toDoubleOrNull() ?: 0.0) / 100.0)
+        (quantity.toDecimalOrNull() ?: 0.0) * (unitPrice.toDecimalOrNull() ?: 0.0) * (1 - (discountPercent.toDecimalOrNull() ?: 0.0) / 100.0)
 }
 
 data class SalesDetailData(
@@ -172,9 +173,9 @@ class SalesDetailViewModel @Inject constructor(
                                 itemNumberSnapshot = it.itemNumberSnapshot,
                                 itemNameSnapshot = it.productName,
                                 unitSnapshot = it.unitSnapshot,
-                                quantity = it.quantity.toDoubleOrNull() ?: 0.0,
-                                unitPrice = it.unitPrice.toDoubleOrNull() ?: 0.0,
-                                discountPercent = it.discountPercent.toDoubleOrNull() ?: 0.0
+                                quantity = it.quantity.toDecimalOrNull() ?: 0.0,
+                                unitPrice = it.unitPrice.toDecimalOrNull() ?: 0.0,
+                                discountPercent = it.discountPercent.toDecimalOrNull() ?: 0.0
                             )
                         }
                     )

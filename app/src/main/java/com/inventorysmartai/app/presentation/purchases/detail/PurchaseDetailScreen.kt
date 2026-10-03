@@ -98,7 +98,7 @@ fun PurchaseDetailScreen(navController: NavController, viewModel: PurchaseDetail
                                         value = row.requestedQuantity,
                                         onValueChange = { viewModel.onQuantityChange(row.productId, it) },
                                         label = { Text("الكمية المطلوبة") },
-                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                         modifier = Modifier.weight(1f),
                                         singleLine = true
                                     )

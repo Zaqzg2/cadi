@@ -16,6 +16,22 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
+import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
+import com.inventorysmartai.app.core.common.UiState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.Icons
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -38,10 +54,39 @@ private val detailTabs = listOf("الأساسية", "المخزون بالفرو
 @Composable
 fun ProductDetailScreen(navController: NavController, viewModel: ProductDetailViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val finished by viewModel.finished.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    /** null = no dialog; otherwise the number of document lines using the product. */
+    var deleteDialogRefs by remember { mutableStateOf<Int?>(null) }
+
+    LaunchedEffect(finished) { if (finished) navController.popBackStack() }
+    LaunchedEffect(message) {
+        message?.let { snackbarHostState.showSnackbar(it); viewModel.onMessageShown() }
+    }
+
+    val loaded = (uiState as? UiState.Success)?.data
 
     Scaffold(
-        topBar = { AppTopBar(title = "تفاصيل الصنف", onBack = { navController.popBackStack() }) }
+        topBar = {
+            AppTopBar(
+                title = "تفاصيل الصنف",
+                onBack = { navController.popBackStack() },
+                actions = {
+                    if (loaded != null) {
+                        IconButton(onClick = {
+                            navController.navigate(Destination.ManualEntry.createRoute(productId = loaded.summary.product.id))
+                        }) { Icon(Icons.Filled.Edit, contentDescription = "تعديل الصنف") }
+                        IconButton(onClick = {
+                            scope.launch { deleteDialogRefs = viewModel.documentReferenceCount() }
+                        }) { Icon(Icons.Filled.Delete, contentDescription = "حذف الصنف") }
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             StateContent(state = uiState, onRetry = {}) { data ->
@@ -50,6 +95,16 @@ fun ProductDetailScreen(navController: NavController, viewModel: ProductDetailVi
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.padding(16.dp)
                 )
+                if (!data.summary.product.isActive) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("هذا الصنف مؤرشف ولا يظهر في القوائم", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { viewModel.setActive(true) }) { Text("استعادة") }
+                    }
+                }
                 ScrollableTabRow(selectedTabIndex = selectedTab, edgePadding = 16.dp) {
                     detailTabs.forEachIndexed { index, label ->
                         Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = { Text(label) })
@@ -67,6 +122,28 @@ fun ProductDetailScreen(navController: NavController, viewModel: ProductDetailVi
             }
         }
     }
+
+    deleteDialogRefs?.let { refs ->
+        val stock = loaded?.summary?.totalQuantity ?: 0.0
+        if (refs > 0) {
+            // Used by counts / purchases / sales: deleting would break that history, so offer archive.
+            AlertDialog(
+                onDismissRequest = { deleteDialogRefs = null },
+                title = { Text("لا يمكن حذف هذا الصنف") },
+                text = { Text("الصنف مستخدم في $refs سطرًا من الجرد أو المشتريات أو المبيعات، وحذفه سيُفسد هذه السجلات.\nيمكنك أرشفته: يختفي من كل القوائم ويبقى في السجلات القديمة، ويمكن استعادته لاحقًا.") },
+                confirmButton = { TextButton(onClick = { deleteDialogRefs = null; viewModel.setActive(false) }) { Text("أرشفة الصنف") } },
+                dismissButton = { TextButton(onClick = { deleteDialogRefs = null }) { Text("إلغاء") } }
+            )
+        } else {
+            DestructiveConfirmDialog(
+                title = "حذف \"${loaded?.summary?.product?.name.orEmpty()}\"؟",
+                message = (if (stock > 0) "سيُحذف الصنف مع رصيده الحالي (${Formatters.formatNumber(stock)}) وكل حركاته نهائيًا." else "سيُحذف الصنف وحركاته نهائيًا.") +
+                    "\nلا يمكن التراجع عن هذا الإجراء.",
+                onConfirm = { deleteDialogRefs = null; viewModel.delete() },
+                onDismiss = { deleteDialogRefs = null }
+            )
+        }
+    }
 }
 
 @Composable
@@ -79,7 +156,10 @@ private fun BasicInfoTab(data: ProductDetailData) {
                     p.itemNumber?.let { "رقم الصنف" to it },
                     p.barcode?.let { "الباركود" to it },
                     p.categoryName?.let { "التصنيف" to it },
-                    p.unitName?.let { "الوحدة" to it }
+                    p.unitName?.let { "الوحدة" to it },
+                    p.defaultPrice?.let { "السعر الافتراضي" to Formatters.formatCurrency(it) },
+                    (if (p.createdAt > 0L) Formatters.formatDate(p.createdAt) else null)?.let { "تاريخ الإضافة" to it },
+                    data.summary.nearestExpiryDate?.let { "أقرب انتهاء" to Formatters.formatDate(it) }
                 )
             )
         }

@@ -41,7 +41,7 @@ fun GoalGroupCard(
                     value = row.targetQuantity,
                     onValueChange = onTargetChange,
                     label = { Text("الهدف") },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -49,7 +49,7 @@ fun GoalGroupCard(
                     value = row.commissionValue,
                     onValueChange = onCommissionValueChange,
                     label = { Text("العمولة") },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )

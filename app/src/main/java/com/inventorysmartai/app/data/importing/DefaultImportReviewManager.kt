@@ -3,6 +3,10 @@ package com.inventorysmartai.app.data.importing
 import com.inventorysmartai.app.data.local.database.dao.ImportDao
 import com.inventorysmartai.app.domain.importing.ImportField
 import com.inventorysmartai.app.domain.importing.ImportReviewManager
+import com.inventorysmartai.app.domain.importing.ImportType
+import com.inventorysmartai.app.domain.importing.ImportValidator
+import com.inventorysmartai.app.domain.importing.NormalizedValue
+import com.inventorysmartai.app.domain.importing.Normalizer
 import com.inventorysmartai.app.domain.importing.MatchResult
 import com.inventorysmartai.app.domain.importing.ParsedImportRow
 import com.inventorysmartai.app.domain.importing.ProductMatcher
@@ -24,7 +28,9 @@ import javax.inject.Singleton
 @Singleton
 class DefaultImportReviewManager @Inject constructor(
     private val importDao: ImportDao,
-    private val productMatcher: ProductMatcher
+    private val productMatcher: ProductMatcher,
+    private val normalizer: Normalizer,
+    private val validator: ImportValidator
 ) : ImportReviewManager {
 
     override fun observeRows(importJobId: Long): Flow<List<ImportRow>> =
@@ -84,56 +90,85 @@ class DefaultImportReviewManager @Inject constructor(
         val entity = importDao.getRowById(rowId) ?: return
         val current = SimpleJson.decodeMap(entity.normalizedData).toMutableMap()
         edits.forEach { (field, value) ->
-            if (value.isNullOrBlank()) current.remove(field.name) else current[field.name] = value
+            if (value.isNullOrBlank()) current.remove(field.name) else current[field.name] = value.trim()
         }
 
-        val identityFields = setOf(ImportField.ITEM_NUMBER, ImportField.BARCODE, ImportField.PRODUCT_NAME)
-        val identityChanged = edits.keys.any { it in identityFields }
+        // Re-validate EVERY edit (not only identity fields). Previously a row that failed validation
+        // kept its errorCode forever, so "fix it first" (see applyDecision) was impossible.
+        val importType = importDao.getJobById(entity.importJobId)?.importType
+            ?.let { runCatching { ImportType.valueOf(it) }.getOrNull() } ?: ImportType.PRODUCTS
+
+        val fields = mutableMapOf<ImportField, NormalizedValue>()
+        current.entries.toList().forEach { (name, value) ->
+            val field = runCatching { ImportField.valueOf(name) }.getOrNull() ?: return@forEach
+            val normalized = normalizer.normalize(field, value)
+            fields[field] = normalized
+            // Store in the SAME form ImportRepositoryImpl.persistAnalysis does (identifiers normalized,
+            // numbers as plain numerals, text as typed). Approval parses these strings with
+            // toDoubleOrNull(), so an edit typed with Arabic digits ("٥") must be saved as "5".
+            current[name] = when {
+                field == ImportField.ITEM_NUMBER || field == ImportField.BARCODE -> normalized.normalized ?: value
+                field.isNumeric -> normalized.numeric?.toString() ?: value
+                else -> value
+            }
+        }
+        val probe = ParsedImportRow(
+            importJobId = entity.importJobId,
+            rowIndex = entity.rowIndex,
+            itemNumber = fields[ImportField.ITEM_NUMBER]?.normalized,
+            barcode = fields[ImportField.BARCODE]?.normalized,
+            name = fields[ImportField.PRODUCT_NAME]?.raw,
+            quantity = null,
+            rawJson = entity.rawData,
+            importType = importType,
+            fields = fields
+        )
+        val validation = validator.validate(probe)
+        val warnings = validation.warnings.map { it.message }
+        val firstError = validation.errors.firstOrNull()
 
         var status = entity.status
         var matchedProductId = entity.matchedProductId
         var suggestedProductId = entity.suggestedProductId
         var confidence = entity.confidence
 
-        // Re-running ProductMatcher here is what lets an edit actually FIX a bad match, not just
-        // change what is displayed — editing a wrong barcode and re-checking are the same action
-        // from the reviewer's point of view. Skipped for a row that still has a hard validation
-        // error: re-matching a row that cannot be accepted anyway would be wasted work, and the
-        // row must go through Accept's own error check regardless.
-        if (identityChanged && entity.errorCode == null) {
-            val probe = ParsedImportRow(
-                importJobId = entity.importJobId,
-                rowIndex = entity.rowIndex,
-                itemNumber = current[ImportField.ITEM_NUMBER.name],
-                barcode = current[ImportField.BARCODE.name],
-                name = current[ImportField.PRODUCT_NAME.name],
-                quantity = null,
-                rawJson = entity.rawData
-            )
-            when (val match = productMatcher.match(probe)) {
-                is MatchResult.ExactBarcode -> {
-                    status = ImportRowStatus.MATCHED.name; matchedProductId = match.productId
-                    suggestedProductId = null; confidence = null
-                }
-                is MatchResult.ExactItemNumber -> {
-                    status = ImportRowStatus.MATCHED.name; matchedProductId = match.productId
-                    suggestedProductId = null; confidence = null
-                }
-                is MatchResult.ExactName -> {
-                    status = ImportRowStatus.MATCHED.name; matchedProductId = match.productId
-                    suggestedProductId = null; confidence = null
-                }
-                is MatchResult.FuzzySuggestion -> {
-                    status = ImportRowStatus.AMBIGUOUS.name; matchedProductId = null
-                    suggestedProductId = match.productId; confidence = match.confidence
-                }
-                MatchResult.NewProduct -> {
-                    status = ImportRowStatus.NEW_PRODUCT.name
-                    matchedProductId = null; suggestedProductId = null; confidence = null
-                }
-                MatchResult.Unresolved -> {
-                    status = ImportRowStatus.PENDING.name
-                    matchedProductId = null; suggestedProductId = null; confidence = null
+        if (firstError != null) {
+            // Still invalid: stays ERROR (cannot be accepted), message reflects the CURRENT problem.
+            status = ImportRowStatus.ERROR.name
+            matchedProductId = null; suggestedProductId = null; confidence = null
+        } else {
+            // Valid now (either it always was, or this edit just fixed it): re-run matching so the
+            // edit can fix a bad match too, and so a formerly-ERROR row gets a real status.
+            val wasError = entity.errorCode != null
+            val identityChanged = edits.keys.any {
+                it == ImportField.ITEM_NUMBER || it == ImportField.BARCODE || it == ImportField.PRODUCT_NAME
+            }
+            if (wasError || identityChanged) {
+                when (val match = productMatcher.match(probe)) {
+                    is MatchResult.ExactBarcode -> {
+                        status = ImportRowStatus.MATCHED.name; matchedProductId = match.productId
+                        suggestedProductId = null; confidence = null
+                    }
+                    is MatchResult.ExactItemNumber -> {
+                        status = ImportRowStatus.MATCHED.name; matchedProductId = match.productId
+                        suggestedProductId = null; confidence = null
+                    }
+                    is MatchResult.ExactName -> {
+                        status = ImportRowStatus.MATCHED.name; matchedProductId = match.productId
+                        suggestedProductId = null; confidence = null
+                    }
+                    is MatchResult.FuzzySuggestion -> {
+                        status = ImportRowStatus.AMBIGUOUS.name; matchedProductId = null
+                        suggestedProductId = match.productId; confidence = match.confidence
+                    }
+                    MatchResult.NewProduct -> {
+                        status = ImportRowStatus.NEW_PRODUCT.name
+                        matchedProductId = null; suggestedProductId = null; confidence = null
+                    }
+                    MatchResult.Unresolved -> {
+                        status = ImportRowStatus.PENDING.name
+                        matchedProductId = null; suggestedProductId = null; confidence = null
+                    }
                 }
             }
         }
@@ -145,7 +180,10 @@ class DefaultImportReviewManager @Inject constructor(
                 status = status,
                 matchedProductId = matchedProductId,
                 suggestedProductId = suggestedProductId,
-                confidence = confidence
+                confidence = confidence,
+                errorCode = firstError?.code?.name,
+                errorMessage = firstError?.message,
+                warningsJson = if (warnings.isEmpty()) null else SimpleJson.encodeList(warnings)
             )
         )
     }

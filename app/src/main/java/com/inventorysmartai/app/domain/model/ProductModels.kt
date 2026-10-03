@@ -14,7 +14,9 @@ data class Product(
     val reorderPoint: Double = 0.0,
     val hasExpiry: Boolean = false,
     val defaultPrice: Double? = null,
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    /** Epoch millis the product was added (0 = unknown, e.g. products built in tests). */
+    val createdAt: Long = 0L
 )
 
 /** One branch+batch stock line for a product (the "Branch stock" section of Product Details). */

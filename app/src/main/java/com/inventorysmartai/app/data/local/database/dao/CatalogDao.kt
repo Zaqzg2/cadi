@@ -28,6 +28,14 @@ interface BranchDao {
 
     @Delete
     suspend fun delete(branch: BranchEntity)
+
+    /** In-place rename. NEVER rename through [upsert]: it is REPLACE, which deletes the row first and
+     *  so cascades away every stock/movement row that references the branch. */
+    @Query("UPDATE branches SET name = :name, updatedAt = :now WHERE id = :id")
+    suspend fun rename(id: Long, name: String, now: Long)
+
+    @Query("SELECT COUNT(*) FROM inventory WHERE branchId = :id")
+    suspend fun stockRowCount(id: Long): Int
 }
 
 @Dao
@@ -44,6 +52,12 @@ interface CategoryDao {
 
     @Query("DELETE FROM categories WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("UPDATE categories SET name = :name, updatedAt = :now WHERE id = :id")
+    suspend fun rename(id: Long, name: String, now: Long)
+
+    @Query("SELECT COUNT(*) FROM products WHERE categoryId = :id")
+    suspend fun productCount(id: Long): Int
 }
 
 @Dao
@@ -60,4 +74,10 @@ interface UnitDao {
 
     @Query("DELETE FROM units WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("UPDATE units SET name = :name, updatedAt = :now WHERE id = :id")
+    suspend fun rename(id: Long, name: String, now: Long)
+
+    @Query("SELECT COUNT(*) FROM products WHERE unitId = :id")
+    suspend fun productCount(id: Long): Int
 }

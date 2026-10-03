@@ -40,4 +40,11 @@ class FakeProductDao(seed: List<ProductEntity> = emptyList()) : ProductDao {
     override suspend fun delete(product: ProductEntity) {
         state.value = state.value - product.id
     }
+
+    /** Tests never create document lines, so nothing references a product. */
+    override suspend fun documentReferenceCount(id: Long): Int = 0
+
+    override suspend fun setActive(id: Long, active: Boolean, now: Long) {
+        state.value[id]?.let { state.value = state.value + (id to it.copy(isActive = active, updatedAt = now)) }
+    }
 }

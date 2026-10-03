@@ -68,6 +68,14 @@ class CatalogRepositoryImpl @Inject constructor(
     override suspend fun deleteUnit(id: Long) {
         unitDao.deleteById(id)
     }
+
+    override suspend fun renameBranch(id: Long, name: String) = branchDao.rename(id, name.trim(), System.currentTimeMillis())
+    override suspend fun renameCategory(id: Long, name: String) = categoryDao.rename(id, name.trim(), System.currentTimeMillis())
+    override suspend fun renameUnit(id: Long, name: String) = unitDao.rename(id, name.trim(), System.currentTimeMillis())
+
+    override suspend fun branchUsageCount(id: Long): Int = branchDao.stockRowCount(id)
+    override suspend fun categoryUsageCount(id: Long): Int = categoryDao.productCount(id)
+    override suspend fun unitUsageCount(id: Long): Int = unitDao.productCount(id)
 }
 
 @Singleton

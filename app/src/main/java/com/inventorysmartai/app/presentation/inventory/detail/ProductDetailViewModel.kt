@@ -41,6 +41,40 @@ class ProductDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<UiState<ProductDetailData>>(UiState.Loading)
     val uiState: StateFlow<UiState<ProductDetailData>> = _uiState.asStateFlow()
 
+    /** True once the product was deleted/archived → the screen closes itself. */
+    private val _finished = MutableStateFlow(false)
+    val finished: StateFlow<Boolean> = _finished.asStateFlow()
+
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+    fun onMessageShown() { _message.value = null }
+
+    /** Lines in counts / purchases / sales that use this product (0 = safe to delete outright). */
+    suspend fun documentReferenceCount(): Int = runCatching { productRepository.documentReferenceCount(productId) }.getOrDefault(0)
+
+    fun delete() {
+        viewModelScope.launch {
+            runCatching { productRepository.deleteProducts(listOf(productId)) }
+                .onSuccess { result ->
+                    if (result.deleted > 0) _finished.value = true
+                    else _message.value = "لا يمكن حذف صنف مرتبط بعمليات سابقة — يمكنك أرشفته بدلًا من ذلك"
+                }
+                .onFailure { _message.value = "تعذّر الحذف: ${it.message ?: it.javaClass.simpleName}" }
+        }
+    }
+
+    /** [active] = false archives (hides everywhere, keeps history); true restores. */
+    fun setActive(active: Boolean) {
+        viewModelScope.launch {
+            runCatching { productRepository.setProductsActive(listOf(productId), active) }
+                .onSuccess {
+                    if (!active) _finished.value = true
+                    else _message.value = "تمت إعادة الصنف إلى القائمة"
+                }
+                .onFailure { _message.value = "تعذّر التنفيذ: ${it.message ?: it.javaClass.simpleName}" }
+        }
+    }
+
     init {
         viewModelScope.launch {
             combine(

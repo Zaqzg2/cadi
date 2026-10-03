@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.goals
 
+import com.inventorysmartai.app.core.common.toDecimalOrNull
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.inventorysmartai.app.core.common.Constants
@@ -134,8 +135,8 @@ class GoalsViewModel @Inject constructor(
             val periodEnd = now.apply { add(Calendar.MONTH, 1); add(Calendar.MILLISECOND, -1) }.timeInMillis
 
             val domainGroups = groups.value.mapIndexedNotNull { index, row ->
-                val target = row.targetQuantity.toDoubleOrNull() ?: return@mapIndexedNotNull null
-                val commission = row.commissionValue.toDoubleOrNull() ?: 0.0
+                val target = row.targetQuantity.toDecimalOrNull() ?: return@mapIndexedNotNull null
+                val commission = row.commissionValue.toDecimalOrNull() ?: 0.0
                 CommissionGroup(
                     groupOrder = index + 1,
                     targetQuantity = target,
