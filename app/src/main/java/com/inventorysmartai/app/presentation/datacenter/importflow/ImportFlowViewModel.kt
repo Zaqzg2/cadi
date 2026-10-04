@@ -22,6 +22,8 @@ import com.inventorysmartai.app.domain.repository.CatalogRepository
 import com.inventorysmartai.app.domain.repository.DeviceSessionRepository
 import com.inventorysmartai.app.domain.repository.ImportRepository
 import com.inventorysmartai.app.domain.repository.PartyRepository
+import com.inventorysmartai.app.domain.repository.ProductRepository
+import com.inventorysmartai.app.domain.importing.ColumnMappingEditor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +53,7 @@ class ImportFlowViewModel @Inject constructor(
     private val columnMapper: ColumnMapper,
     private val catalogRepository: CatalogRepository,
     private val partyRepository: PartyRepository,
+    private val productRepository: ProductRepository,
     private val attachmentRepository: AttachmentRepository,
     private val deviceSessionRepository: DeviceSessionRepository
 ) : ViewModel() {
@@ -68,6 +71,15 @@ class ImportFlowViewModel @Inject constructor(
         }
         viewModelScope.launch {
             partyRepository.observeSuppliers().collect { suppliers -> update { it.copy(suppliers = suppliers) } }
+        }
+        viewModelScope.launch {
+            catalogRepository.observeCategories().collect { c -> update { it.copy(categoryNames = c.map { x -> x.name.trim().lowercase() }.toSet()) } }
+        }
+        viewModelScope.launch {
+            catalogRepository.observeUnits().collect { u -> update { it.copy(unitNames = u.map { x -> x.name.trim().lowercase() }.toSet()) } }
+        }
+        viewModelScope.launch {
+            productRepository.observeProducts().collect { products -> update { it.copy(products = products) } }
         }
     }
 
@@ -265,7 +277,12 @@ class ImportFlowViewModel @Inject constructor(
     fun useSuggestedTemplate() {
         val template = _state.value.suggestedTemplate ?: return
         val importType = _state.value.importType ?: return
-        update { it.copy(columnMapping = columnMapper.applyTemplate(it.headers, importType, template)) }
+        update { st ->
+            // Columns the person added by hand are not part of any template — keep them.
+            val added = st.columnMapping?.mappings?.filter { it.isVirtual }.orEmpty()
+            val applied = columnMapper.applyTemplate(st.headers, importType, template)
+            st.copy(columnMapping = ColumnMappingResult(applied.mappings + added))
+        }
     }
 
     /** Re-runs steps 4-9 with the (possibly human-edited) mapping applied, so validation/
@@ -296,12 +313,29 @@ class ImportFlowViewModel @Inject constructor(
         val mapping = _state.value.columnMapping ?: return
         if (name.isBlank()) return
         viewModelScope.launch {
-            val fieldMap = mapping.mapped.mapNotNull { m -> m.field?.let { field -> m.header to field } }.toMap()
-            runCatching { importRepository.saveMappingTemplate(name.trim(), importType, mapping.mappings.map { it.header }, fieldMap) }
+            val fieldMap = mapping.mapped.filterNot { it.isVirtual }.mapNotNull { m -> m.field?.let { field -> m.header to field } }.toMap()
+            runCatching { importRepository.saveMappingTemplate(name.trim(), importType, mapping.mappings.filterNot { it.isVirtual }.map { it.header }, fieldMap) }
                 .onSuccess { update { it.copy(snackbarMessage = "تم حفظ القالب \"${name.trim()}\"") } }
                 .onFailure { e -> update { it.copy(snackbarMessage = e.message) } }
         }
     }
+
+    // ---- Column editor (add / rename / delete columns, constant values) ----
+
+    private fun editMapping(change: (ColumnMappingResult) -> ColumnMappingResult) {
+        val current = _state.value.columnMapping ?: return
+        update { it.copy(columnMapping = change(current)) }
+    }
+
+    /** Adds a column that is not in the file: every row gets [value] for [field] where the file left it blank. */
+    fun addConstantColumn(label: String, field: ImportField, value: String) {
+        if (label.isBlank() || value.isBlank()) { update { it.copy(snackbarMessage = "اسم العمود والقيمة مطلوبان") }; return }
+        editMapping { ColumnMappingEditor.addConstantColumn(it, label, field, value) }
+    }
+    fun renameColumn(columnIndex: Int, newLabel: String) = editMapping { ColumnMappingEditor.rename(it, columnIndex, newLabel) }
+    fun setColumnConstant(columnIndex: Int, value: String) = editMapping { ColumnMappingEditor.setConstant(it, columnIndex, value) }
+    fun removeColumn(columnIndex: Int) = editMapping { ColumnMappingEditor.remove(it, columnIndex) }
+    fun restoreColumn(columnIndex: Int) = editMapping { ColumnMappingEditor.restore(it, columnIndex) }
 
     // ---- Step: review ----
 
@@ -320,7 +354,53 @@ class ImportFlowViewModel @Inject constructor(
     }
 
     fun onEditRow(rowId: Long, edits: Map<ImportField, String?>) {
-        viewModelScope.launch { importReviewManager.updateRowFields(rowId, edits) }
+        viewModelScope.launch {
+            runCatching { importReviewManager.updateRowFields(rowId, edits) }
+                .onFailure { e -> update { it.copy(snackbarMessage = "تعذّر حفظ التعديل: ${e.message ?: e.javaClass.simpleName}") } }
+        }
+    }
+
+    /** Accept / reject / etc. for several rows (table selection). Rows that cannot take the decision
+     *  (errors, uncertain matches) are skipped and counted, never silently accepted. */
+    fun onBulkDecision(rowIds: Collection<Long>, decision: RowDecision) {
+        val jobId = _state.value.jobId ?: return
+        if (rowIds.isEmpty()) return
+        // Predicted from the rows as they are now (the review flow re-emits asynchronously, so reading the
+        // result back right after the write could still show the old statuses).
+        val rowsById = _state.value.reviewRows.associateBy { it.id }
+        val acceptable = rowIds.count { id ->
+            rowsById[id]?.let { it.errorCode == null && it.status != ImportRowStatus.AMBIGUOUS } == true
+        }
+        viewModelScope.launch {
+            runCatching { importReviewManager.applyBulkDecision(jobId, rowIds.toList(), decision) }
+                .onSuccess {
+                    if (decision == RowDecision.Accept) {
+                        val skipped = rowIds.size - acceptable
+                        update { it.copy(snackbarMessage = if (skipped > 0) "قُبل $acceptable صف، وتخطّى $skipped (أخطاء أو غير مؤكدة — راجعها)" else "قُبل $acceptable صف") }
+                    }
+                }
+                .onFailure { e -> update { it.copy(snackbarMessage = e.message ?: "تعذّر تنفيذ الإجراء") } }
+        }
+    }
+
+    /** The person's explicit answer for an uncertain row (pick a product / "it is new"): applies the match
+     *  decision and accepts the row in one step, since choosing IS the confirmation. */
+    fun onResolveMatch(rowId: Long, decision: RowDecision) {
+        viewModelScope.launch {
+            runCatching {
+                importReviewManager.applyDecision(rowId, decision)
+                importReviewManager.applyDecision(rowId, RowDecision.Accept)
+            }.onFailure { e -> update { it.copy(snackbarMessage = e.message ?: "تعذّر تنفيذ الإجراء") } }
+        }
+    }
+
+    fun onDeleteRows(rowIds: Collection<Long>) {
+        if (rowIds.isEmpty()) return
+        viewModelScope.launch {
+            runCatching { importReviewManager.deleteRows(rowIds.toList()) }
+                .onSuccess { update { it.copy(snackbarMessage = "تم حذف ${rowIds.size} صف من الاستيراد") } }
+                .onFailure { e -> update { it.copy(snackbarMessage = e.message ?: "تعذّر الحذف") } }
+        }
     }
 
     /** "Accept confident matches" per spec section 15 — MATCHED (exact match) and NEW_PRODUCT

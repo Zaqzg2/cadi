@@ -48,6 +48,11 @@ class PurchaseRepositoryImpl @Inject constructor(
 
     override suspend fun saveRequest(request: PurchaseRequest): Long = database.withTransaction {
         val now = System.currentTimeMillis()
+        val existing = if (request.id != 0L) purchaseDao.getRequestById(request.id) else null
+        // Received quantities are ALWAYS recomputed from the receipts themselves, never trusted from the
+        // caller: the screen used to re-save stale lines right after receive(), resetting them to 0
+        // (which made a received request look unreceived and allowed a double receipt).
+        val receivedTotals = if (existing != null) purchaseDao.receivedByProduct(existing.id).associate { it.productId to it.total } else emptyMap()
         val requestId = purchaseDao.upsertRequest(
             PurchaseRequestEntity(
                 id = request.id,
@@ -57,7 +62,7 @@ class PurchaseRepositoryImpl @Inject constructor(
                 requestDate = request.requestDate,
                 status = request.status.name,
                 notes = request.notes,
-                createdAt = now,
+                createdAt = existing?.createdAt ?: now,
                 updatedAt = now
             )
         )
@@ -70,7 +75,7 @@ class PurchaseRepositoryImpl @Inject constructor(
                     currentStockSnapshot = item.currentStockSnapshot,
                     requestedQuantity = item.requestedQuantity,
                     approvedQuantity = item.approvedQuantity,
-                    receivedQuantity = item.receivedQuantity,
+                    receivedQuantity = receivedTotals[item.productId] ?: 0.0,
                     notes = item.notes,
                     createdAt = now,
                     updatedAt = now
@@ -78,6 +83,17 @@ class PurchaseRepositoryImpl @Inject constructor(
             }
         )
         requestId
+    }
+
+    override suspend fun updateStatus(requestId: Long, status: PurchaseStatus) {
+        purchaseDao.updateStatus(requestId, status.name, System.currentTimeMillis())
+    }
+
+    override suspend fun deleteRequest(requestId: Long): Unit = database.withTransaction {
+        // Receipts CASCADE with the request but the stock they added would stay — refuse instead.
+        check(purchaseDao.receiptLineCount(requestId) == 0) { "تم استلام بضاعة على هذا الطلب ولا يمكن حذفه" }
+        purchaseDao.clearItems(requestId)
+        purchaseDao.deleteRequest(requestId)
     }
 
     /**

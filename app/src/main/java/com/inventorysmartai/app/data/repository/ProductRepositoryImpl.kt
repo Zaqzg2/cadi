@@ -1,5 +1,7 @@
 package com.inventorysmartai.app.data.repository
 
+import androidx.room.withTransaction
+import com.inventorysmartai.app.data.local.database.InventorySmartDatabase
 import com.inventorysmartai.app.data.local.database.dao.BranchDao
 import com.inventorysmartai.app.data.local.database.dao.CategoryDao
 import com.inventorysmartai.app.data.local.database.dao.InventoryDao
@@ -27,6 +29,7 @@ import javax.inject.Singleton
 
 @Singleton
 class ProductRepositoryImpl @Inject constructor(
+    private val database: InventorySmartDatabase,
     private val productDao: ProductDao,
     private val inventoryDao: InventoryDao,
     private val inventoryMovementDao: InventoryMovementDao,
@@ -141,7 +144,9 @@ class ProductRepositoryImpl @Inject constructor(
         return productDao.upsert(entity)
     }
 
-    override suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double): Long {
+    // One transaction: the product, its opening stock row and its movement are saved together or not at all
+    // (a failure between the steps used to leave a product with no stock/movement, or stock with no history).
+    override suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double): Long = database.withTransaction {
         val productId = upsert(product.copy(id = 0L))
         if (branchId != null && openingQuantity > 0.0) {
             val now = System.currentTimeMillis()
@@ -159,7 +164,7 @@ class ProductRepositoryImpl @Inject constructor(
                 )
             )
         }
-        return productId
+        productId
     }
 
     override suspend fun updateProduct(product: Product) {

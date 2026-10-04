@@ -34,3 +34,23 @@ fun filterPickerItems(items: List<PickerItem>, query: String, groupId: Long?): L
             (words.isEmpty() || ArabicTextNormalizer.normalize(item.searchText).let { hay -> words.all { hay.contains(it) } })
     }
 }
+
+/** Picker rows for products: searchable by name + item number + barcode, grouped by category. */
+fun List<com.inventorysmartai.app.domain.model.Product>.toPickerItems(
+    trailing: (com.inventorysmartai.app.domain.model.Product) -> String? = { null }
+): List<PickerItem> = map { p ->
+    PickerItem(
+        id = p.id,
+        title = p.name,
+        subtitle = listOfNotNull(p.itemNumber?.let { "رقم $it" }, p.categoryName, p.unitName).joinToString(" • ").ifBlank { null },
+        trailing = trailing(p),
+        groupId = p.categoryId,
+        searchText = "${p.name} ${p.itemNumber.orEmpty()} ${p.barcode.orEmpty()}"
+    )
+}
+
+/** The category filter chips of the product picker (only categories that products actually use). */
+fun List<com.inventorysmartai.app.domain.model.Product>.toPickerGroups(): List<PickerGroup> =
+    mapNotNull { p -> p.categoryId?.let { id -> PickerGroup(id, p.categoryName ?: "—") } }
+        .distinctBy { it.id }
+        .sortedBy { it.name }

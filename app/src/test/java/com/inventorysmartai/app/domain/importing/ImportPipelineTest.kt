@@ -167,4 +167,61 @@ class ImportPipelineTest {
         )
         assertEquals(listOf(1 to 2, 2 to 2), seen)
     }
+
+    // ---- Phase 5: columns added / removed in the mapping editor ----
+
+    @Test
+    fun `an added constant column fills a field the file does not have, making rows valid`() = runBlocking {
+        val base = DefaultColumnMapper().suggestMapping(listOf("اسم الصنف"), ImportType.INVENTORY)
+        val withQuantity = ColumnMappingEditor.addConstantColumn(base, "كمية", ImportField.CURRENT_STOCK, "7")
+        val result = pipelineWith().analyze(
+            table(listOf("اسم الصنف"), listOf("أرز بسمتي")),
+            ImportType.INVENTORY,
+            importJobId = 1L,
+            columnMappingOverride = withQuantity
+        )
+        val analysis = result.analyses.first()
+        assertTrue(analysis.validation.isValid)
+        assertEquals(7.0, analysis.row.numericValue(ImportField.CURRENT_STOCK))
+    }
+
+    @Test
+    fun `a real per-row value wins over an added constant`() = runBlocking {
+        val base = DefaultColumnMapper().suggestMapping(listOf("اسم الصنف", "الرصيد الحالي"), ImportType.INVENTORY)
+        val withConstant = ColumnMappingEditor.addConstantColumn(base, "كمية", ImportField.CURRENT_STOCK, "7")
+        val result = pipelineWith().analyze(
+            table(listOf("اسم الصنف", "الرصيد الحالي"), listOf("أرز", "25"), listOf("سكر", "")),
+            ImportType.INVENTORY,
+            importJobId = 1L,
+            columnMappingOverride = withConstant
+        )
+        assertEquals(25.0, result.analyses[0].row.numericValue(ImportField.CURRENT_STOCK))
+        assertEquals(7.0, result.analyses[1].row.numericValue(ImportField.CURRENT_STOCK)) // blank in the file -> constant
+    }
+
+    @Test
+    fun `deleting a column excludes it so its required field is missing`() = runBlocking {
+        val base = DefaultColumnMapper().suggestMapping(listOf("اسم الصنف", "الرصيد الحالي"), ImportType.INVENTORY)
+        val stockIndex = base.columnFor(ImportField.CURRENT_STOCK)!!.columnIndex
+        val removed = ColumnMappingEditor.remove(base, stockIndex)
+        val result = pipelineWith().analyze(
+            table(listOf("اسم الصنف", "الرصيد الحالي"), listOf("أرز", "25")),
+            ImportType.INVENTORY,
+            importJobId = 1L,
+            columnMappingOverride = removed
+        )
+        assertEquals(ImportRowStatus.ERROR, result.analyses.first().resolvedStatus())
+    }
+
+    @Test
+    fun `two columns with the same header keep both raw values`() = runBlocking {
+        val result = pipelineWith().analyze(
+            table(listOf("اسم الصنف", "ملاحظة", "ملاحظة"), listOf("أرز", "أولى", "ثانية")),
+            ImportType.PRODUCTS,
+            importJobId = 1L
+        )
+        val raw = result.analyses.first().row.rawJson
+        assertTrue(raw.contains("أولى"))
+        assertTrue(raw.contains("ثانية"))
+    }
 }

@@ -10,5 +10,6 @@ class FakeSalesRepository(private val soldQuantity: Double = 0.0) : SalesReposit
     override fun observeRecentInvoices(limit: Int): Flow<List<SalesInvoice>> = MutableStateFlow(emptyList())
     override fun observeInvoice(invoiceId: Long): Flow<SalesInvoice?> = MutableStateFlow(null)
     override suspend fun saveInvoice(invoice: SalesInvoice): Long = 0L
+    override suspend fun deleteDraftInvoice(invoiceId: Long) {}
     override suspend fun getSoldQuantity(productId: Long, fromDate: Long, toDate: Long): Double = soldQuantity
 }

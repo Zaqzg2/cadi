@@ -18,27 +18,45 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.inventorysmartai.app.core.common.Formatters
+import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
+import com.inventorysmartai.app.core.designsystem.component.SearchField
 import com.inventorysmartai.app.core.designsystem.component.StateContent
+import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
+import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.CountStatus
-import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.domain.model.InventoryCount
 
 @Composable
 fun CountingListScreen(navController: NavController, viewModel: CountingListViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val query by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val snackbarHost = remember { SnackbarHostState() }
+    var pendingDelete by remember { mutableStateOf<InventoryCount?>(null) }
+
+    LaunchedEffect(message) { message?.let { snackbarHost.showSnackbar(it); viewModel.onMessageShown() } }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("الجرد") }) },
+        snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate(Destination.CountingDetail.createRoute()) }) {
                 Icon(Icons.Filled.Add, contentDescription = "جرد جديد")
@@ -46,36 +64,51 @@ fun CountingListScreen(navController: NavController, viewModel: CountingListView
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+            SearchField(
+                value = query,
+                onValueChange = viewModel::onQueryChange,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+            )
             StateContent(
                 state = uiState,
                 onRetry = {},
                 emptyContent = {
                     Column(modifier = Modifier.fillMaxSize().padding(32.dp)) {
-                        Text("لا توجد عمليات جرد بعد — اضغط + لبدء أول جرد", style = MaterialTheme.typography.bodyMedium)
+                        Text(if (query.isNotBlank()) "لا توجد نتائج للبحث" else "لا توجد عمليات جرد بعد — اضغط + لبدء أول جرد", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-            ) { counts ->
+            ) { list ->
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(counts, key = { it.id }) { count ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { navController.navigate(Destination.CountingDetail.createRoute(count.id)) }
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column {
-                                    Text(count.branchName ?: "فرع", style = MaterialTheme.typography.bodyLarge)
-                                    Text(Formatters.formatDate(count.countDate), style = MaterialTheme.typography.labelSmall)
+                    items(list, key = { it.id }) { item ->
+                        // swipe: delete (drafts only — the ViewModel explains why otherwise), tap: open
+                        SwipeActionRow(onDelete = { if (viewModel.canDelete(item)) pendingDelete = item else viewModel.delete(item) }) {
+                            Card(modifier = Modifier.fillMaxWidth(), onClick = { navController.navigate(Destination.CountingDetail.createRoute(item.id)) }) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.branchName ?: "فرع", style = MaterialTheme.typography.bodyLarge)
+                                        Text("${Formatters.formatDate(item.countDate)} • ${item.items.size} صنف", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    StatusPill(text = statusLabel(item.status), color = statusColor(item.status))
                                 }
-                                StatusPill(text = statusLabel(count.status), color = statusColor(count.status))
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    pendingDelete?.let { item ->
+        DestructiveConfirmDialog(
+            title = "حذف مسودة الجرد؟",
+            message = "ستُحذف المسودة وأصنافها نهائيًا. لا تأثير على المخزون.",
+            onConfirm = { pendingDelete = null; viewModel.delete(item) },
+            onDismiss = { pendingDelete = null }
+        )
     }
 }
 

@@ -36,6 +36,9 @@ interface SalesDao {
     @Insert
     suspend fun insertItems(items: List<SalesInvoiceItemEntity>)
 
+    @Query("DELETE FROM sales_invoices WHERE id = :id")
+    suspend fun deleteInvoice(id: Long)
+
     @Query("""
         SELECT COALESCE(SUM(sii.quantity), 0.0) FROM sales_invoice_items sii
         INNER JOIN sales_invoices si ON si.id = sii.salesInvoiceId

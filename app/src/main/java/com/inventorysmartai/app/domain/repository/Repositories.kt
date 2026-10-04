@@ -70,17 +70,41 @@ interface CatalogRepository {
 }
 
 interface PartyRepository {
+    /** ACTIVE customers / suppliers only (what pickers and imports should offer). */
     fun observeCustomers(): Flow<List<Customer>>
     fun observeSuppliers(): Flow<List<Supplier>>
+    fun observeArchivedCustomers(): Flow<List<Customer>>
+    fun observeArchivedSuppliers(): Flow<List<Supplier>>
+
+    /** Creates a new party (id == 0). Editing an existing one goes through [updateCustomer]/[updateSupplier]. */
     suspend fun upsertCustomer(customer: Customer): Long
     suspend fun upsertSupplier(supplier: Supplier): Long
+
+    /** In-place edit (keeps the party's history linked). */
+    suspend fun updateCustomer(customer: Customer)
+    suspend fun updateSupplier(supplier: Supplier)
+
+    /** Deletes a party that no document references; otherwise returns the number of documents using it
+     *  and deletes nothing (the caller offers to archive instead). */
+    suspend fun deleteCustomer(id: Long): PartyDeleteResult
+    suspend fun deleteSupplier(id: Long): PartyDeleteResult
+    suspend fun setCustomerActive(id: Long, active: Boolean)
+    suspend fun setSupplierActive(id: Long, active: Boolean)
 }
+
+/** [blockedByDocuments] > 0 means nothing was deleted because that many documents reference the party. */
+data class PartyDeleteResult(val deleted: Boolean, val blockedByDocuments: Int = 0)
 
 interface CountingRepository {
     fun observeCounts(): Flow<List<InventoryCount>>
     fun observeRecentCounts(limit: Int): Flow<List<InventoryCount>>
     fun observeCount(countId: Long): Flow<InventoryCount?>
+    /** Saves a DRAFT count, or completes it (applies the stock corrections). A COMPLETED count is
+     *  final: saving over it throws [IllegalStateException]. */
     suspend fun saveCount(count: InventoryCount): Long
+
+    /** Deletes a DRAFT / IN_PROGRESS count. A COMPLETED one changed stock and cannot be deleted. */
+    suspend fun deleteDraftCount(countId: Long)
 }
 
 interface GoalRepository {
@@ -97,13 +121,24 @@ interface PurchaseRepository {
     fun observeRequest(requestId: Long): Flow<PurchaseRequest?>
     suspend fun saveRequest(request: PurchaseRequest): Long
     suspend fun receive(receipt: PurchaseReceipt, lines: List<PurchaseReceiptLine>)
+
+    /** Changes only the status; the lines (and their received quantities) are untouched. */
+    suspend fun updateStatus(requestId: Long, status: PurchaseStatus)
+
+    /** Deletes a request that never moved stock. Throws [IllegalStateException] if anything was received. */
+    suspend fun deleteRequest(requestId: Long)
 }
 
 interface SalesRepository {
     fun observeInvoices(): Flow<List<SalesInvoice>>
     fun observeRecentInvoices(limit: Int): Flow<List<SalesInvoice>>
     fun observeInvoice(invoiceId: Long): Flow<SalesInvoice?>
+    /** Saves a DRAFT, or confirms it. A CONFIRMED invoice already moved stock, so saving over it
+     *  throws [IllegalStateException] — editing its lines would silently desync inventory. */
     suspend fun saveInvoice(invoice: SalesInvoice): Long
+
+    /** Deletes a DRAFT invoice only (a CONFIRMED one is part of the stock history). */
+    suspend fun deleteDraftInvoice(invoiceId: Long)
     suspend fun getSoldQuantity(productId: Long, fromDate: Long, toDate: Long): Double
 }
 

@@ -16,6 +16,7 @@ import com.inventorysmartai.app.domain.model.Customer
 import com.inventorysmartai.app.domain.model.Supplier
 import com.inventorysmartai.app.domain.model.UnitOfMeasure
 import com.inventorysmartai.app.domain.repository.CatalogRepository
+import com.inventorysmartai.app.domain.repository.PartyDeleteResult
 import com.inventorysmartai.app.domain.repository.PartyRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -85,10 +86,62 @@ class PartyRepositoryImpl @Inject constructor(
 ) : PartyRepository {
 
     override fun observeCustomers(): Flow<List<Customer>> =
-        customerDao.observeAll().map { list -> list.map { it.toDomain() } }
+        customerDao.observeByActive(true).map { list -> list.map { it.toDomain() } }
 
     override fun observeSuppliers(): Flow<List<Supplier>> =
-        supplierDao.observeAll().map { list -> list.map { it.toDomain() } }
+        supplierDao.observeByActive(true).map { list -> list.map { it.toDomain() } }
+
+    override fun observeArchivedCustomers(): Flow<List<Customer>> =
+        customerDao.observeByActive(false).map { list -> list.map { it.toDomain() } }
+
+    override fun observeArchivedSuppliers(): Flow<List<Supplier>> =
+        supplierDao.observeByActive(false).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun updateCustomer(customer: Customer) {
+        val existing = customerDao.getById(customer.id) ?: throw IllegalArgumentException("العميل غير موجود")
+        customerDao.update(
+            existing.copy(
+                customerNumber = customer.customerNumber, name = customer.name.trim(), phone = customer.phone,
+                address = customer.address, openingBalance = customer.openingBalance, isActive = customer.isActive,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun updateSupplier(supplier: Supplier) {
+        val existing = supplierDao.getById(supplier.id) ?: throw IllegalArgumentException("المورّد غير موجود")
+        supplierDao.update(
+            existing.copy(
+                supplierNumber = supplier.supplierNumber, name = supplier.name.trim(), phone = supplier.phone,
+                address = supplier.address, notes = supplier.notes, isActive = supplier.isActive,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun deleteCustomer(id: Long): PartyDeleteResult {
+        val existing = customerDao.getById(id) ?: return PartyDeleteResult(deleted = true)
+        val used = customerDao.invoiceCount(id)
+        if (used > 0) return PartyDeleteResult(deleted = false, blockedByDocuments = used)
+        customerDao.delete(existing)
+        return PartyDeleteResult(deleted = true)
+    }
+
+    override suspend fun deleteSupplier(id: Long): PartyDeleteResult {
+        val existing = supplierDao.getById(id) ?: return PartyDeleteResult(deleted = true)
+        val used = supplierDao.documentCount(id)
+        if (used > 0) return PartyDeleteResult(deleted = false, blockedByDocuments = used)
+        supplierDao.delete(existing)
+        return PartyDeleteResult(deleted = true)
+    }
+
+    override suspend fun setCustomerActive(id: Long, active: Boolean) {
+        customerDao.getById(id)?.let { customerDao.update(it.copy(isActive = active, updatedAt = System.currentTimeMillis())) }
+    }
+
+    override suspend fun setSupplierActive(id: Long, active: Boolean) {
+        supplierDao.getById(id)?.let { supplierDao.update(it.copy(isActive = active, updatedAt = System.currentTimeMillis())) }
+    }
 
     override suspend fun upsertCustomer(customer: Customer): Long {
         val now = System.currentTimeMillis()

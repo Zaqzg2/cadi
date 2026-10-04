@@ -45,6 +45,10 @@ class DefaultImportReviewManager @Inject constructor(
                 // the identity fields) before a row can be accepted — silently accepting an
                 // invalid row would defeat the whole point of Validation being its own step.
                 check(entity.errorCode == null) { "لا يمكن قبول صف يحتوي على خطأ يجب إصلاحه أولاً" }
+                // An AMBIGUOUS row has only a SUGGESTED product. Accepting it as-is used to make approval create a
+                // brand-new duplicate product; the person must first confirm the suggestion, pick another
+                // product, or say it is genuinely new.
+                check(entity.status != ImportRowStatus.AMBIGUOUS.name) { "هذا الصف غير مؤكد: حدّد الصنف المطابق أو اختر «صنف جديد» قبل قبوله" }
                 entity.copy(status = ImportRowStatus.ACCEPTED.name)
             }
             // "Reject" and "Ignore" are presented as two actions in the UI (spec section 13) but
@@ -84,6 +88,10 @@ class DefaultImportReviewManager @Inject constructor(
         rowIds.forEach { rowId ->
             runCatching { applyDecision(rowId, decision) }
         }
+    }
+
+    override suspend fun deleteRows(rowIds: List<Long>) {
+        rowIds.forEach { id -> importDao.deleteRowById(id) }
     }
 
     override suspend fun updateRowFields(rowId: Long, edits: Map<ImportField, String?>) {

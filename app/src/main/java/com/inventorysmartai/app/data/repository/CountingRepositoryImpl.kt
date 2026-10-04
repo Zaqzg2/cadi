@@ -46,6 +46,10 @@ class CountingRepositoryImpl @Inject constructor(
      */
     override suspend fun saveCount(count: InventoryCount): Long = database.withTransaction {
         val now = System.currentTimeMillis()
+        val existing = if (count.id != 0L) countingDao.getById(count.id) else null
+        // A completed count already corrected stock and wrote its movements; re-saving it would
+        // duplicate those movements.
+        check(existing?.status != CountStatus.COMPLETED.name) { "الجرد المكتمل لا يمكن تعديله" }
         val countId = countingDao.upsertCount(
             InventoryCountEntity(
                 id = count.id,
@@ -53,7 +57,7 @@ class CountingRepositoryImpl @Inject constructor(
                 countDate = count.countDate,
                 status = count.status.name,
                 notes = count.notes,
-                createdAt = now,
+                createdAt = existing?.createdAt ?: now,
                 updatedAt = now
             )
         )
@@ -73,8 +77,13 @@ class CountingRepositoryImpl @Inject constructor(
         )
 
         if (count.status == CountStatus.COMPLETED) {
-            count.items.filter { it.difference != 0.0 }.forEach { item ->
+            count.items.forEach { item ->
                 val existingStock = inventoryDao.getForProductAndBranch(item.productId, count.branchId)
+                // The adjustment is measured against the stock AS IT IS NOW, not the snapshot taken when
+                // the line was added: sales/receipts since then must not be double-counted or erased.
+                val currentQuantity = existingStock?.quantity ?: 0.0
+                val change = item.actualQuantity - currentQuantity
+                if (change == 0.0) return@forEach
                 inventoryDao.upsert(
                     InventoryEntity(
                         id = existingStock?.id ?: 0L,
@@ -92,7 +101,7 @@ class CountingRepositoryImpl @Inject constructor(
                         productId = item.productId,
                         branchId = count.branchId,
                         movementType = MovementType.COUNT_ADJUSTMENT.name,
-                        quantityChange = item.difference,
+                        quantityChange = change,
                         referenceType = "INVENTORY_COUNT",
                         referenceId = countId,
                         notes = item.notes,
@@ -102,6 +111,13 @@ class CountingRepositoryImpl @Inject constructor(
             }
         }
         countId
+    }
+
+    override suspend fun deleteDraftCount(countId: Long): Unit = database.withTransaction {
+        val existing = countingDao.getById(countId) ?: return@withTransaction
+        check(existing.status != CountStatus.COMPLETED.name) { "الجرد المكتمل غيّر المخزون ولا يمكن حذفه" }
+        countingDao.clearItems(countId)
+        countingDao.deleteCount(countId)
     }
 }
 

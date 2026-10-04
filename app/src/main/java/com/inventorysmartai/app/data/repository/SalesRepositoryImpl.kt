@@ -57,7 +57,11 @@ class SalesRepositoryImpl @Inject constructor(
      */
     override suspend fun saveInvoice(invoice: SalesInvoice): Long = database.withTransaction {
         val now = System.currentTimeMillis()
-        val previousStatus = if (invoice.id != 0L) salesDao.getById(invoice.id)?.status?.let(InvoiceStatus::valueOf) else null
+        val existing = if (invoice.id != 0L) salesDao.getById(invoice.id) else null
+        val previousStatus = existing?.status?.let(InvoiceStatus::valueOf)
+        // A confirmed invoice has already decreased stock and written its movements; replacing its
+        // lines here would leave inventory and the invoice permanently out of step.
+        check(previousStatus != InvoiceStatus.CONFIRMED) { "لا يمكن تعديل فاتورة مؤكدة" }
         val isCompleting = invoice.status == InvoiceStatus.CONFIRMED && previousStatus != InvoiceStatus.CONFIRMED
 
         if (isCompleting) {
@@ -88,7 +92,7 @@ class SalesRepositoryImpl @Inject constructor(
                 finalBalance = finalBalance,
                 notes = invoice.notes,
                 status = invoice.status.name,
-                createdAt = now,
+                createdAt = existing?.createdAt ?: now,
                 updatedAt = now
             )
         )
@@ -141,6 +145,13 @@ class SalesRepositoryImpl @Inject constructor(
             }
         }
         invoiceId
+    }
+
+    override suspend fun deleteDraftInvoice(invoiceId: Long): Unit = database.withTransaction {
+        val existing = salesDao.getById(invoiceId) ?: return@withTransaction
+        check(existing.status != InvoiceStatus.CONFIRMED.name) { "لا يمكن حذف فاتورة مؤكدة" }
+        salesDao.clearItems(invoiceId)
+        salesDao.deleteInvoice(invoiceId)
     }
 
     override suspend fun getSoldQuantity(productId: Long, fromDate: Long, toDate: Long): Double =

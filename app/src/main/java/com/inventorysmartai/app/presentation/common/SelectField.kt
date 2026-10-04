@@ -32,7 +32,8 @@ fun SelectField(
     modifier: Modifier = Modifier,
     groups: List<PickerGroup> = emptyList(),
     clearable: Boolean = true,
-    placeholder: String = "اختر"
+    placeholder: String = "اختر",
+    enabled: Boolean = true
 ) {
     var open by remember { mutableStateOf(false) }
     val selectedTitle = items.firstOrNull { it.id == selectedId }?.title.orEmpty()
@@ -40,19 +41,20 @@ fun SelectField(
     val pressed by interaction.collectIsPressedAsState()
 
     // A read-only OutlinedTextField swallows clicks, so open on the press itself.
-    LaunchedEffect(pressed) { if (pressed) open = true }
+    LaunchedEffect(pressed) { if (pressed && enabled) open = true }
 
     OutlinedTextField(
         value = selectedTitle,
         onValueChange = {},
         readOnly = true,
+        enabled = enabled,
         label = { Text(label) },
         placeholder = { Text(placeholder) },
         singleLine = true,
         interactionSource = interaction,
         modifier = modifier,
         trailingIcon = {
-            if (clearable && selectedId != null) {
+            if (enabled && clearable && selectedId != null) {
                 IconButton(onClick = { onSelected(null) }) { Icon(Icons.Filled.Clear, contentDescription = "مسح الاختيار") }
             } else {
                 Icon(Icons.Filled.ArrowDropDown, contentDescription = null)

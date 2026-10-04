@@ -43,6 +43,9 @@ interface ImportDao {
     @Query("DELETE FROM import_rows WHERE importJobId = :jobId")
     suspend fun deleteRowsForJob(jobId: Long)
 
+    @Query("DELETE FROM import_rows WHERE id = :rowId")
+    suspend fun deleteRowById(rowId: Long)
+
     @Query("UPDATE import_jobs SET sheetName = :sheetName, updatedAt = :updatedAt WHERE id = :jobId")
     suspend fun updateJobSheet(jobId: Long, sheetName: String?, updatedAt: Long)
 

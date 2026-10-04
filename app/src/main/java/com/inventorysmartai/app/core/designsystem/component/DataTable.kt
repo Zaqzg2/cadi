@@ -63,8 +63,12 @@ class TableColumn<T>(
     val numeric: Boolean = false,
     val text: (T) -> String,
     val comparator: Comparator<T>? = null,
-    val onEdit: ((row: T, newText: String) -> Unit)? = null
+    val onEdit: ((row: T, newText: String) -> Unit)? = null,
+    /** Colours the cell text (errors red, warnings amber, secondary info muted). */
+    val emphasis: ((T) -> CellEmphasis)? = null
 )
+
+enum class CellEmphasis { NORMAL, ERROR, WARNING, MUTED }
 
 /**
  * Spreadsheet-style list: sticky header, horizontal scroll for many columns, row numbers, in-place
@@ -226,7 +230,12 @@ fun <T> DataTable(
                                     overflow = TextOverflow.Ellipsis,
                                     textAlign = if (col.numeric) TextAlign.Center else TextAlign.Start,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = if (col.onEdit != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    color = when (col.emphasis?.invoke(row)) {
+                                        CellEmphasis.ERROR -> MaterialTheme.colorScheme.error
+                                        CellEmphasis.WARNING -> MaterialTheme.colorScheme.tertiary
+                                        CellEmphasis.MUTED -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        else -> if (col.onEdit != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    }
                                 )
                             }
                         }

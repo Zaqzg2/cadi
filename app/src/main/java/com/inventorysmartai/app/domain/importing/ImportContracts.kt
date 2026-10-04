@@ -103,6 +103,9 @@ interface ImportReviewManager {
      *  keys are [ImportField] names; a null value clears that field. Confined to the pending
      *  import row until approval, per the spec — it never touches production tables. */
     suspend fun updateRowFields(rowId: Long, edits: Map<ImportField, String?>)
+
+    /** Removes rows from the pending import entirely (not just rejects them). Pending rows only. */
+    suspend fun deleteRows(rowIds: List<Long>)
 }
 
 /** A human decision on one review row (spec section 13's row actions, minus "Edit" which is

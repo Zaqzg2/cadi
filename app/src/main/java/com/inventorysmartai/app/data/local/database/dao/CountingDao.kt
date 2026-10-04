@@ -32,4 +32,10 @@ interface CountingDao {
 
     @Insert
     suspend fun insertItems(items: List<InventoryCountItemEntity>)
+
+    @Query("SELECT * FROM inventory_counts WHERE id = :id")
+    suspend fun getById(id: Long): InventoryCountEntity?
+
+    @Query("DELETE FROM inventory_counts WHERE id = :id")
+    suspend fun deleteCount(id: Long)
 }

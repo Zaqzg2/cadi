@@ -591,6 +591,14 @@ class ImportRepositoryImpl @Inject constructor(
 
         // NEW_PRODUCT (or a PENDING/AMBIGUOUS row a human still chose to Accept without changing
         // its match — treated the same as a new product, since there is no other id to attach to).
+        // productDao.upsert is REPLACE on the unique barcode / item-number indexes: creating a "new" product whose
+        // barcode or number already exists would DELETE that product (and, by cascade, its stock) — e.g. two rows
+        // for the same new item in one file, or a person who accepted a duplicate. Reuse the existing product instead.
+        val newBarcode = fields[ImportField.BARCODE.name]?.takeIf { it.isNotBlank() }
+        val newItemNumber = fields[ImportField.ITEM_NUMBER.name]?.takeIf { it.isNotBlank() }
+        val alreadyThere = newBarcode?.let { productDao.getByBarcode(it) } ?: newItemNumber?.let { productDao.getByItemNumber(it) }
+        if (alreadyThere != null) return alreadyThere.id
+
         val name = fields[ImportField.PRODUCT_NAME.name]?.takeIf { it.isNotBlank() }
             ?: fields[ImportField.ITEM_NUMBER.name]
             ?: fields[ImportField.BARCODE.name]

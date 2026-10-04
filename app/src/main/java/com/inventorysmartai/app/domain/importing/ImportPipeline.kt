@@ -238,7 +238,11 @@ class DefaultImportPipeline @Inject constructor(
         val fields = mutableMapOf<ImportField, NormalizedValue>()
 
         raw.forEachIndexed { colIndex, cellValue ->
-            val header = headers.getOrElse(colIndex) { "العمود ${colIndex + 1}" }
+            val baseHeader = headers.getOrElse(colIndex) { "العمود ${colIndex + 1}" }
+            // Two columns with the same header used to share one key and silently overwrite each other's raw value.
+            var header = baseHeader
+            var n = 2
+            while (rawByHeader.containsKey(header)) { header = "$baseHeader ($n)"; n++ }
             rawByHeader[header] = cellValue
 
             val field = mapping.fieldFor(colIndex)
@@ -248,6 +252,15 @@ class DefaultImportPipeline @Inject constructor(
             // If a field is (incorrectly) mapped from more than one column, the first non-blank
             // value wins rather than a later blank column silently erasing a good one.
             if (fields[field]?.raw.isNullOrBlank()) fields[field] = normalized
+        }
+
+        // Columns the person added in the mapping screen: a constant for every row, filling the field only
+        // where the file itself left it blank (so a real per-row value always wins).
+        mapping.mappings.filter { it.isVirtual }.forEach { column ->
+            val field = column.field ?: return@forEach
+            if (field == ImportField.IGNORE) return@forEach
+            if (fields[field]?.raw.isNullOrBlank()) fields[field] = normalizer.normalize(field, column.constantValue)
+            rawByHeader[column.displayName] = column.constantValue
         }
 
         val quantity = quantityFieldFor(importType, fields)

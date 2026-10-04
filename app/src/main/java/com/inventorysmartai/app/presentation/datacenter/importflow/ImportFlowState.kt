@@ -21,6 +21,11 @@ data class ImportFlowState(
     val importType: ImportType? = null,
     val branches: List<Branch> = emptyList(),
     val suppliers: List<Supplier> = emptyList(),
+    /** Active products — used by the review screen to show/pick the matched product of an uncertain row. */
+    val products: List<com.inventorysmartai.app.domain.model.Product> = emptyList(),
+    /** Existing category / unit names (trimmed, lower-cased) — to warn which ones the import would CREATE. */
+    val categoryNames: Set<String> = emptySet(),
+    val unitNames: Set<String> = emptySet(),
     val selectedBranchId: Long? = null,
     val selectedSupplierId: Long? = null,
 

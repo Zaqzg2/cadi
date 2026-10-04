@@ -12,8 +12,17 @@ data class ColumnMapping(
     val header: String,
     val field: ImportField?,
     val requiresConfirmation: Boolean = false,
-    val isUserOverride: Boolean = false
-)
+    val isUserOverride: Boolean = false,
+    /** A name the person gave the column (display only — [header] stays the file's real header, since
+     *  saved templates match files by it). */
+    val label: String? = null,
+    /** Non-null = a column the person ADDED: it is not in the file, every row gets this value for [field]
+     *  (only where the file left that field blank). E.g. branch = "الرياض" for the whole file. */
+    val constantValue: String? = null
+) {
+    val isVirtual: Boolean get() = constantValue != null
+    val displayName: String get() = label?.takeIf { it.isNotBlank() } ?: header.ifBlank { "عمود بلا اسم" }
+}
 
 /** The column-mapping screen's whole model: every source column plus its current field (or
  *  lack of one). "Unknown columns" per the spec = [unmapped]; "Unmapped columns" in the spec's
