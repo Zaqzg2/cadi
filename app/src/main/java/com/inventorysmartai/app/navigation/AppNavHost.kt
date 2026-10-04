@@ -41,6 +41,7 @@ import com.inventorysmartai.app.presentation.reports.ReportsScreen
 import com.inventorysmartai.app.presentation.sales.detail.SalesDetailScreen
 import com.inventorysmartai.app.presentation.sales.list.SalesListScreen
 import com.inventorysmartai.app.presentation.settings.AppInfoScreen
+import com.inventorysmartai.app.presentation.settings.aiproviders.AiProvidersScreen
 import com.inventorysmartai.app.presentation.settings.PlaceholderScreen
 import com.inventorysmartai.app.presentation.settings.SettingsScreen
 import com.inventorysmartai.app.presentation.settings.catalog.CatalogListScreen
@@ -158,6 +159,7 @@ fun AppNavHost() {
             ) { CatalogListScreen(navController) }
             composable(Destination.SettingsInventory.route) { InventorySettingsScreen(navController) }
             composable(Destination.GoogleServicesStatus.route) { GoogleServicesStatusScreen(navController) }
+            composable(Destination.AiProviders.route) { AiProvidersScreen(navController) }
             composable(
                 Destination.SettingsPlaceholder.route,
                 arguments = listOf(navArgument(Destination.SettingsPlaceholder.ARG_KEY) { type = NavType.StringType })

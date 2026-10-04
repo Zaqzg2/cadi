@@ -42,7 +42,7 @@ private val placeholderRows = listOf(
     SettingsRow("المزامنة", Destination.SettingsPlaceholder.createRoute("sync")),
     SettingsRow("الحساب وخدمات Google", Destination.GoogleServicesStatus.route),
     SettingsRow("الصلاحيات", Destination.SettingsPlaceholder.createRoute("permissions")),
-    SettingsRow("إعدادات الذكاء الاصطناعي", Destination.SettingsPlaceholder.createRoute("ai_settings"))
+    SettingsRow("إعدادات الذكاء الاصطناعي", Destination.AiProviders.route)
 )
 
 @Composable

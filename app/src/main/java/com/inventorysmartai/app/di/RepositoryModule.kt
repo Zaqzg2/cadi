@@ -1,12 +1,12 @@
 package com.inventorysmartai.app.di
 
-import com.inventorysmartai.app.data.assistant.AssistantRepositoryImpl
+import com.inventorysmartai.app.data.assistant.RoutingAssistantRepository
 import com.inventorysmartai.app.data.assistant.DefaultLocalToolExecutor
 import com.inventorysmartai.app.data.google.DeviceSessionRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleAuthRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleServiceStatusRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleWorkspaceRepositoryImpl
-import com.inventorysmartai.app.data.importing.FirebaseAiDocumentImportRepositoryImpl
+import com.inventorysmartai.app.data.importing.RoutingAiDocumentImportRepository
 import com.inventorysmartai.app.data.importing.AndroidContentImportSource
 import com.inventorysmartai.app.data.importing.DefaultImportEngine
 import com.inventorysmartai.app.data.importing.DefaultImportReviewManager
@@ -87,12 +87,14 @@ abstract class RepositoryModule {
     @Binds @Singleton abstract fun bindImportReviewManager(impl: DefaultImportReviewManager): ImportReviewManager
 
     // --- Phase 4: AI + Google ecosystem ---
-    @Binds @Singleton abstract fun bindAssistantRepository(impl: AssistantRepositoryImpl): AssistantRepository
+    @Binds @Singleton abstract fun bindAssistantRepository(impl: RoutingAssistantRepository): AssistantRepository
     @Binds @Singleton abstract fun bindLocalToolExecutor(impl: DefaultLocalToolExecutor): LocalToolExecutor
-    // The phone calls Gemini itself through Firebase AI Logic (App Check attests the app; there is no API
-    // key in the APK) while the backend is paused. To route through the backend again, bind
-    // AiDocumentImportRepositoryImpl here instead (that class is unchanged and still compiles).
-    @Binds @Singleton abstract fun bindAiDocumentImportRepository(impl: FirebaseAiDocumentImportRepositoryImpl): AiDocumentImportRepository
+    // Both AI entry points go through a router: with at least one Groq/Mistral/OpenRouter key saved in
+    // Settings the phone calls those providers directly (Mistral OCR for Arabic documents, an on-device
+    // tool-calling loop for the assistant); with none saved, behaviour is exactly as before (Firebase AI Logic
+    // for documents, the backend for the assistant). To drop Firebase/the backend later, bind the Direct*
+    // implementations here and delete the Routing* classes.
+    @Binds @Singleton abstract fun bindAiDocumentImportRepository(impl: RoutingAiDocumentImportRepository): AiDocumentImportRepository
     @Binds @Singleton abstract fun bindDeviceSessionRepository(impl: DeviceSessionRepositoryImpl): DeviceSessionRepository
     @Binds @Singleton abstract fun bindGoogleAuthRepository(impl: GoogleAuthRepositoryImpl): GoogleAuthRepository
     @Binds @Singleton abstract fun bindGoogleWorkspaceRepository(impl: GoogleWorkspaceRepositoryImpl): GoogleWorkspaceRepository

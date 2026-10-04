@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Phase 1 has no cloud backend, so there is nothing extra to include/exclude yet. -->
+<!-- The AI provider keys are encrypted with an Android Keystore key that never leaves this phone, so a
+     restored copy would be unreadable anyway. Keep the file out of backups instead of restoring dead values. -->
 <full-backup-content>
+    <exclude domain="file" path="datastore/ai_provider_settings.preferences_pb" />
 </full-backup-content>
