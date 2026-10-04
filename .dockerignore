@@ -1,1 +1,10 @@
-{"returncode":0,"stdout":".git\n.github\n.gradle\n.idea\n*.iml\nlocal.properties\nbuild\napp/build\nbackend/build\n*.hprof\n","stderr":""}
+.git
+.github
+.gradle
+.idea
+*.iml
+local.properties
+build
+app/build
+backend/build
+*.hprof
