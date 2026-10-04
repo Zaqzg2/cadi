@@ -1,0 +1,1 @@
+{"returncode":0,"stdout":".git\n.github\n.gradle\n.idea\n*.iml\nlocal.properties\nbuild\napp/build\nbackend/build\n*.hprof\n","stderr":""}
