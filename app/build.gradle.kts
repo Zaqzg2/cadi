@@ -27,7 +27,7 @@ fun configValue(name: String, fallback: String): String =
         ?: System.getenv(name)?.takeIf { it.isNotBlank() }
         ?: fallback
 
-val googleServerClientId = configValue("GOOGLE_BACKEND_SERVER_CLIENT_ID", "CHANGE-ME.apps.googleusercontent.com")
+val googleServerClientId = configValue("GOOGLE_BACKEND_SERVER_CLIENT_ID", "870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com")
 val backendUrlDebug = configValue("BACKEND_BASE_URL_DEBUG", "http://10.0.2.2:8080/")
 val backendUrlRelease = configValue("BACKEND_BASE_URL", "https://CHANGE-ME.example.com/")
 
@@ -90,7 +90,7 @@ android {
             // 10.0.2.2 is the Android emulator's alias for the host machine's localhost — run
             // `./gradlew :backend:run` on the same machine the emulator runs on. A physical
             // device needs the host's real LAN IP instead.
-            buildConfigField("String", "BACKEND_BASE_URL", "\"${backendUrlDebug}\"")
+            buildConfigField("String", "BACKEND_BASE_URL", "\"https://cadi-9qmu.onrender.com/\"")
         }
     }
 
