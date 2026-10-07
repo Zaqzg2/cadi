@@ -60,6 +60,9 @@ class AiProvidersViewModel @Inject constructor(
 
     fun setPreferMistralOcr(value: Boolean) = viewModelScope.launch { settings.setPreferMistralOcr(value) }
 
+    /** true = skip the backend and use the keys saved on this phone; false (default) = the backend. */
+    fun setPreferDirect(value: Boolean) = viewModelScope.launch { settings.setPreferDirect(value) }
+
     /** One tiny request: proves the key works AND the text-model id exists. */
     fun test(id: AiProviderId) = viewModelScope.launch {
         val provider = settings.active(id)

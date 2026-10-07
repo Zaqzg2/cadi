@@ -95,7 +95,7 @@ interface ImportPipeline {
 
     /**
      * Phase 4: the AI-extraction entry point. A photographed/PDF document has no literal
-     * spreadsheet columns to detect a header row in or map — Gemini already returned field-level
+     * spreadsheet columns to detect a header row in or map — the model already returned field-level
      * values directly (see the app's `domain/importing/ai/AiExtractionMapper`, which turns the
      * backend's structured JSON into [rows] here, running each field's raw text through the exact
      * same [Normalizer] a spreadsheet cell would go through). So this method starts one stage

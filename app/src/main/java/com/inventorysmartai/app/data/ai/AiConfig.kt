@@ -1,27 +1,24 @@
 package com.inventorysmartai.app.data.ai
 
-/**
- * Constants for document extraction through Firebase AI Logic (Gemini Developer API backend).
- */
+/** Limits shared by every AI path (the backend, and the optional direct-provider mode). */
 object AiConfig {
     /**
-     * The model name is only a string sent to Gemini through Firebase AI Logic. `gemini-3.8-flash` is
-     * what Google's Firebase AI Logic getting-started guide uses (page updated 24 Sept 2026). Older Flash
-     * names get retired, and Firebase recommends making this remotely changeable (Remote Config) once
-     * the feature is live, so a retired name never needs an app release.
-     */
-    const val MODEL_NAME = "gemini-3.8-flash"
-
-    /**
-     * Largest file sent inline. The whole request must stay under Gemini's 20 MB inline limit and
-     * base64 makes the bytes ~4/3 larger, so 10 MB of raw file is the safe ceiling. Typical invoice
+     * Largest file sent in one request. The backend caps uploads at 10 MB by default (MAX_UPLOAD_BYTES) and base64 makes
+     * the bytes ~4/3 larger on the wire for providers that need it, so 10 MB of raw file is the ceiling. Typical invoice
      * photos and PDFs are far smaller.
      */
     const val MAX_INLINE_BYTES = 10 * 1024 * 1024
 
     /**
-     * Longest the analysis screen waits for Gemini. The SDK's own timeout is far longer, and a call that is
-     * stuck (blocked network, a VPN, App Check retrying) would otherwise leave the spinner up forever.
+     * Longest ONE direct-provider request may take. A call that is stuck (blocked network, a VPN) would otherwise leave
+     * the spinner up forever.
      */
     const val REQUEST_TIMEOUT_MS = 90_000L
+
+    /**
+     * Longest the app waits for the whole of one backend AI request. It is deliberately long: a free-tier server that has
+     * gone to sleep needs up to about a minute to wake before it even starts working, and then the server itself may try
+     * several providers in turn (it stops by itself after ~100 s).
+     */
+    const val BACKEND_REQUEST_TIMEOUT_MS = 200_000L
 }

@@ -9,7 +9,7 @@ import com.inventorysmartai.app.data.ai.AiSchemaNode
 import com.inventorysmartai.app.data.ai.AiString
 
 /**
- * The same [AiSchemaNode] tree that feeds Firebase's `Schema` is turned here into plain JSON Schema,
+ * The [AiSchemaNode] tree is turned here into plain JSON Schema,
  * which is then pasted into the prompt. Groq / Mistral / OpenRouter free models all honour
  * `response_format: json_object` but not every model honours a strict schema, so the schema is given to
  * the model as text and the answer is validated afterwards by Moshi + the deterministic import pipeline.

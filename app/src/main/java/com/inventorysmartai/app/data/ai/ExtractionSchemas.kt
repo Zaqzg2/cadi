@@ -3,11 +3,9 @@ package com.inventorysmartai.app.data.ai
 import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocumentType
 
 /**
- * The response schema for each [AiExtractionDocumentType], sent to Gemini through Firebase AI Logic.
- *
- * Ported from the backend module's gemini/ExtractionSchemas.kt (whose tests ran green in CI): the same
- * six document types, the same field names, the same instruction text — expressed as [AiSchemaNode]s
- * instead of a JSON tree, because the Firebase SDK takes its own `Schema` type, not raw JSON Schema.
+ * The response schema for each [AiExtractionDocumentType], used by the direct-provider mode (the backend has its own copy
+ * in backend/.../ai/ExtractionSchemas.kt: the same six document types, the same field names, the same instruction text).
+ * Here it is expressed as [AiSchemaNode]s and turned into JSON Schema text for the prompt by provider/JsonSchemaConverter.kt.
  *
  * Every schema shares one shape — a document-level `header` (facts that apply to the whole document:
  * invoice number, requester name, ...) plus a `rows` array (one entry per line/product/tier) — because
@@ -15,7 +13,7 @@ import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocumentType
  * source row/column, confidence/uncertainty, validation warnings" and "never save AI-extracted data
  * directly without review".
  *
- * Deliberate design choice: Gemini is NOT asked for a "normalized value". It is asked only for the
+ * Deliberate design choice: the model is NOT asked for a "normalized value". It is asked only for the
  * [raw] text exactly as printed/written, per field, with a confidence score. That raw text is then run
  * through the *same* deterministic `Normalizer`/`ImportValidator`/`ProductMatcher` used for
  * spreadsheet imports (see domain/importing/ai/AiExtractionMapper.kt) — so normalization and validation

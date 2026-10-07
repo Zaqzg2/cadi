@@ -11,6 +11,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Build-time settings baked into the APK (all optional — blank values fall back to placeholders and the app then says
+    # exactly what is missing). Add them under GitHub > Settings > Secrets and variables > Actions:
+    #   BACKEND_BASE_URL   the deployed backend, e.g. https://inventory-smart-ai-backend.onrender.com/
+    #   BACKEND_APP_KEY    the backend's APP_API_KEY
+    #   GOOGLE_BACKEND_SERVER_CLIENT_ID   the Web OAuth client id (only for the Google Workspace features)
+    # The debug APK this workflow produces uses the same backend URL as a release build would.
+    env:
+      BACKEND_BASE_URL: ${{ secrets.BACKEND_BASE_URL }}
+      BACKEND_BASE_URL_DEBUG: ${{ secrets.BACKEND_BASE_URL }}
+      BACKEND_APP_KEY: ${{ secrets.BACKEND_APP_KEY }}
+      GOOGLE_BACKEND_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_BACKEND_SERVER_CLIENT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,10 +63,9 @@ jobs:
           ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build-output.log
         continue-on-error: true
 
-      # Phase 4: builds the backend's full Ktor application distribution (a plain JVM jar, not an
-      # Android artifact) - confirms it assembles end to end, beyond what running its unit tests
-      # alone verifies. Needs no secrets (GEMINI_API_KEY etc.) - AppConfig only reads them lazily,
-      # the first time a real request comes in, never at build/compile time - see backend/README.md.
+      # Builds the backend's full Ktor application distribution (a plain JVM app, not an Android artifact) - confirms it
+      # assembles end to end, beyond what running its unit tests alone verifies. Needs no secrets: ServerConfig reads the
+      # environment only when the server starts, never at build time - see backend/README.md.
       - name: Build backend
         id: build_backend
         if: steps.unit_tests.outcome == 'success'
@@ -64,6 +74,20 @@ jobs:
           ./gradlew :backend:build --stacktrace 2>&1 | tee backend-build-output.log
         continue-on-error: true
 
+      # Deployment check: the same Dockerfile the hosting platforms use. Informational only (it never blocks the APK) - a
+      # failure here means "fix this before deploying", and shows up as a warning on the run.
+      - name: Build backend Docker image (deployment check)
+        id: docker_build
+        if: steps.unit_tests.outcome == 'success'
+        run: |
+          set -o pipefail
+          docker build -t inventory-smart-ai-backend . 2>&1 | tee docker-build-output.log
+        continue-on-error: true
+
+      - name: Warn if the Docker image did not build
+        if: steps.docker_build.outcome == 'failure'
+        run: echo "::warning::The backend Docker image failed to build - see the 'Build backend Docker image' step before deploying."
+
       - name: Collect failure logs
         if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure' || steps.build_backend.outcome == 'failure'
         run: |
@@ -71,6 +95,7 @@ jobs:
           cp unit-test-output.log ci-failure-logs/ 2>/dev/null || true
           cp build-output.log ci-failure-logs/ 2>/dev/null || true
           cp backend-build-output.log ci-failure-logs/ 2>/dev/null || true
+          cp docker-build-output.log ci-failure-logs/ 2>/dev/null || true
           [ -d app/build/reports ] && cp -r app/build/reports ci-failure-logs/app-build-reports
           [ -d backend/build/reports ] && cp -r backend/build/reports ci-failure-logs/backend-build-reports
           exit 0

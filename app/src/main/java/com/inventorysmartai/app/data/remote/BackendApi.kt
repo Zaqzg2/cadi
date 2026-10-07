@@ -1,17 +1,13 @@
 package com.inventorysmartai.app.data.remote
 
-import com.inventorysmartai.app.data.remote.dto.AssistantTurnResponseDto
 import com.inventorysmartai.app.data.remote.dto.CalendarEventRequestDto
 import com.inventorysmartai.app.data.remote.dto.CalendarEventResultDto
-import com.inventorysmartai.app.data.remote.dto.ContinueRequest
 import com.inventorysmartai.app.data.remote.dto.DocCreateRequestDto
 import com.inventorysmartai.app.data.remote.dto.DocumentExtractionResponseDto
 import com.inventorysmartai.app.data.remote.dto.DriveUploadResultDto
-import com.inventorysmartai.app.data.remote.dto.ExecuteBackendToolRequest
 import com.inventorysmartai.app.data.remote.dto.GoogleAuthStatusDto
 import com.inventorysmartai.app.data.remote.dto.LinkGoogleAccountRequest
 import com.inventorysmartai.app.data.remote.dto.SendEmailRequestDto
-import com.inventorysmartai.app.data.remote.dto.SendMessageRequest
 import com.inventorysmartai.app.data.remote.dto.ServiceStatusDto
 import com.inventorysmartai.app.data.remote.dto.SessionIdRequest
 import com.inventorysmartai.app.data.remote.dto.SheetsExportRequestDto
@@ -27,25 +23,19 @@ import retrofit2.http.Part
 import retrofit2.http.Query
 
 /**
- * One method per backend route (see backend/README.md's "API surface" table for the full
- * contract). Every write action here (sendEmail, createCalendarEvent, ...) is called by the app
- * only after the user has already confirmed it — this interface has no opinion on that, it is
- * pure transport.
+ * One method per backend route (see backend/README.md's "API surface" table for the full contract). Every write action
+ * here (sendEmail, createCalendarEvent, ...) is called by the app only after the user has already confirmed it — this
+ * interface has no opinion on that, it is pure transport. The AI chat endpoint (/v1/ai/chat) is not here: it is called
+ * through data/backend/BackendChatGateway.kt, which needs the raw JSON of the model's answer.
+ *
+ * The X-App-Key and X-Google-Link headers are added to every request by BackendHeadersInterceptor.
  */
 interface BackendApi {
-    @POST("v1/assistant/message")
-    suspend fun sendAssistantMessage(@Body request: SendMessageRequest): AssistantTurnResponseDto
-
-    @POST("v1/assistant/continue")
-    suspend fun continueAssistant(@Body request: ContinueRequest): AssistantTurnResponseDto
-
-    @POST("v1/assistant/executeBackendTool")
-    suspend fun executeBackendTool(@Body request: ExecuteBackendToolRequest): AssistantTurnResponseDto
-
+    /** One PDF, or up to 5 page images in page order (every part is named "file"). 422 PDF_NEEDS_IMAGES = resend as images. */
     @Multipart
     @POST("v1/documents/extract")
     suspend fun extractDocument(
-        @Part file: MultipartBody.Part,
+        @Part files: List<MultipartBody.Part>,
         @Part("documentType") documentType: RequestBody,
         @Part("sessionId") sessionId: RequestBody
     ): DocumentExtractionResponseDto
@@ -78,5 +68,5 @@ interface BackendApi {
     suspend fun createCalendarEvent(@Body request: CalendarEventRequestDto): CalendarEventResultDto
 
     @GET("v1/status")
-    suspend fun getServiceStatus(@Query("sessionId") sessionId: String, @Query("verifyGemini") verifyGemini: Boolean = false): ServiceStatusDto
+    suspend fun getServiceStatus(@Query("sessionId") sessionId: String, @Query("verifyAi") verifyAi: Boolean = false): ServiceStatusDto
 }

@@ -4,6 +4,8 @@ import com.inventorysmartai.app.data.remote.dto.ErrorResponseDto
 import com.squareup.moshi.Moshi
 import retrofit2.HttpException
 import java.io.IOException
+import java.io.InterruptedIOException
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Every Phase 4 repository that calls [BackendApi] goes through this — one place that turns the
@@ -19,8 +21,14 @@ sealed class BackendFailure(val messageAr: String, cause: Throwable? = null) : E
 
 suspend fun <T> safeApiCall(moshi: Moshi, block: suspend () -> T): Result<T> = try {
     Result.success(block())
+} catch (e: CancellationException) {
+    throw e // a cancelled coroutine must stay cancelled — never turn it into a "failure" the UI would show
+} catch (e: InterruptedIOException) {
+    // A timeout (SocketTimeoutException is an InterruptedIOException): the connection exists but nothing came back in time.
+    // On free hosting this is usually "the server is waking up", which deserves its own message, not "no internet".
+    Result.failure(BackendFailure.Structured("BACKEND_TIMEOUT", "انتهت مهلة الانتظار. قد يكون الخادم يستيقظ من وضع السكون (يستغرق نحو دقيقة) — أعد المحاولة بعد قليل."))
 } catch (e: IOException) {
-    // No connection, DNS failure, timeout, ... — the one case the spec explicitly wants a fixed,
+    // No connection, DNS failure, ... — the one case the spec explicitly wants a fixed,
     // literal Arabic string for everywhere it appears ("يتطلب اتصالًا بالإنترنت").
     Result.failure(BackendFailure.NetworkUnavailable(e))
 } catch (e: HttpException) {
@@ -29,11 +37,7 @@ suspend fun <T> safeApiCall(moshi: Moshi, block: suspend () -> T): Result<T> = t
             moshi.adapter(ErrorResponseDto::class.java).fromJson(body)
         }
     }.getOrNull()
-    if (parsed != null) {
-        Result.failure(BackendFailure.Structured(parsed.error.code, parsed.error.message))
-    } else {
-        Result.failure(BackendFailure.Unknown(e))
-    }
+    Result.failure(backendFailureFor(e.code(), parsed))
 } catch (e: Exception) {
     Result.failure(BackendFailure.Unknown(e))
 }

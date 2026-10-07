@@ -28,7 +28,12 @@ data class AiProviderSnapshot(
     /** In priority order — the first usable one is tried first, the rest are automatic fallbacks. */
     val providers: List<ProviderConfig>,
     /** Read documents with Mistral OCR first (best for Arabic) when a Mistral key exists. */
-    val preferMistralOcr: Boolean
+    val preferMistralOcr: Boolean,
+    /**
+     * false (the default): every AI request goes through the app's own backend, which holds the provider keys.
+     * true: the person chose to use the keys saved on THIS phone directly, bypassing the backend.
+     */
+    val preferDirect: Boolean = false
 )
 
 /** A provider that is switched on AND has a key — everything a request needs. Never logged, never shown. */
@@ -42,7 +47,8 @@ class ActiveProvider(
 }
 
 /**
- * Keys, on/off switches, model ids and priority for the direct providers. Lives in its OWN DataStore file
+ * Keys, on/off switches, model ids and priority for the OPTIONAL direct-provider mode (the default path is the backend;
+ * these keys are only used when the person turns on "use my own keys", or as a fallback when the backend is unreachable). Lives in its OWN DataStore file
  * (`ai_provider_settings`) so it can be excluded from Android backups: the keys are encrypted with a
  * Keystore key that does not move to another phone anyway, so restoring them would only leave dead values.
  */
@@ -61,6 +67,7 @@ class AiProviderSettings @Inject constructor(
     private fun visionKey(id: AiProviderId) = stringPreferencesKey("vision_model_${id.name}")
     private val orderKey = stringPreferencesKey("order")
     private val preferOcrKey = booleanPreferencesKey("prefer_mistral_ocr")
+    private val preferDirectKey = booleanPreferencesKey("prefer_direct")
 
     val snapshot: Flow<AiProviderSnapshot> = store.data.map { it.toSnapshot() }
 
@@ -81,7 +88,8 @@ class AiProviderSettings @Inject constructor(
                 visionModel = this[visionKey(id)]?.takeIf { it.isNotBlank() } ?: id.defaultVisionModel
             )
         },
-        preferMistralOcr = this[preferOcrKey] ?: true
+        preferMistralOcr = this[preferOcrKey] ?: true,
+        preferDirect = this[preferDirectKey] ?: false
     )
 
     /** Enabled providers with a readable key, in priority order. */
@@ -134,6 +142,10 @@ class AiProviderSettings @Inject constructor(
 
     suspend fun setPreferMistralOcr(value: Boolean) {
         store.edit { it[preferOcrKey] = value }
+    }
+
+    suspend fun setPreferDirect(value: Boolean) {
+        store.edit { it[preferDirectKey] = value }
     }
 
     private companion object {

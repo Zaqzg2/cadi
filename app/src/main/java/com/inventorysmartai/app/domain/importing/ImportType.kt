@@ -6,7 +6,7 @@ package com.inventorysmartai.app.domain.importing
  * Phase 3. SALES_INVOICES gained real approval logic in Phase 4 (see
  * [com.inventorysmartai.app.data.repository.ImportRepositoryImpl.approveSalesInvoices]) — Phase 3
  * left it with the enum value and pipeline plumbing only ("infrastructure but not advanced
- * invoice-specific parsing yet"); Gemini's document understanding (see the backend module's
+ * invoice-specific parsing yet"); the model's document understanding (see the backend module's
  * gemini/ExtractionSchemas.kt) is exactly that "advanced invoice-specific parsing".
  */
 enum class ImportType(val labelAr: String) {

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.android.gms.common.api.ApiException
 import com.inventorysmartai.app.BuildConfig
 import com.inventorysmartai.app.data.google.GoogleAuthCancelledException
+import com.inventorysmartai.app.data.backend.BackendConfig
 import com.inventorysmartai.app.data.google.GoogleAuthManager
 import com.inventorysmartai.app.data.remote.BackendFailure
 import com.inventorysmartai.app.domain.repository.GoogleAuthRepository
@@ -41,18 +42,34 @@ class GoogleServicesStatusViewModel @Inject constructor(
         refresh()
     }
 
-    fun refresh(verifyGemini: Boolean = false) {
+    /** [verifyAi] = true spends one tiny real AI request on the server to prove a provider key and model work. */
+    fun refresh(verifyAi: Boolean = false) {
         viewModelScope.launch {
             update { it.copy(isLoading = true, errorMessage = null) }
             val authStatus = googleAuthRepository.getStatus().getOrNull()
-            val serviceStatus = googleServiceStatusRepository.getStatus(verifyGemini).getOrNull()
-            update { it.copy(isLoading = false, linked = authStatus?.linked ?: false, status = serviceStatus) }
+            val statusResult = googleServiceStatusRepository.getStatus(verifyAi)
+            val serviceStatus = statusResult.getOrNull()
+            // A failed status call is the most useful thing to tell the person: it is usually "the server is asleep",
+            // "wrong URL" or "wrong app key", each of which has its own message.
+            val failure = statusResult.exceptionOrNull()
+            update {
+                it.copy(
+                    isLoading = false,
+                    linked = authStatus?.linked ?: false,
+                    status = serviceStatus,
+                    errorMessage = failure?.let { f -> mapError(f) }
+                )
+            }
         }
     }
 
     /** [activity] is used only for the duration of this one call (to launch Google's consent UI
      *  if needed) — never retained, so this does not leak the Activity past its own lifecycle. */
     fun connect(activity: ComponentActivity) {
+        BackendConfig.configurationProblem()?.let { problem ->
+            update { it.copy(errorMessage = problem) }
+            return
+        }
         // Fail fast with the real reason instead of letting Google reject a placeholder client id with an
         // opaque error that the generic message below would hide.
         if (BuildConfig.GOOGLE_BACKEND_SERVER_CLIENT_ID.startsWith("CHANGE-ME")) {
@@ -84,9 +101,7 @@ class GoogleServicesStatusViewModel @Inject constructor(
 
     private fun mapError(e: Throwable): String = when (e) {
         is GoogleAuthCancelledException -> e.message ?: "تم إلغاء العملية"
-        is BackendFailure.NetworkUnavailable ->
-            "تعذّر الوصول إلى الخادم (${BuildConfig.BACKEND_BASE_URL}) — تأكد أنه يعمل وأن العنوان صحيح. " +
-                "العنوان 10.0.2.2 يعمل على المحاكي فقط؛ على الهاتف استخدم عنوان الجهاز في الشبكة أو رابط الخادم المنشور"
+        is BackendFailure.NetworkUnavailable -> BackendConfig.unreachableMessage()
         is BackendFailure -> e.messageAr
         is ApiException -> when (e.statusCode) {
             10 -> "خطأ إعداد (DEVELOPER_ERROR): تأكد من إنشاء OAuth client من نوع Android في Google Cloud بنفس اسم الحزمة وبصمة SHA-1 للتوقيع"

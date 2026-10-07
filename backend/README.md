@@ -1,86 +1,79 @@
-# Inventory Smart AI — Backend (Phase 4)
+# Inventory Smart AI — backend
 
-Plain Kotlin/JVM [Ktor](https://ktor.io) server. Holds every secret the Android app must never see
-(the Gemini API key, the Google OAuth *client secret*) and does every Gemini/Google Workspace call
-on the app's behalf — see the root `README.md`'s Phase 4 section for the full architecture writeup
-and the sources every version/API-shape claim below was checked against.
+A small **stateless** Ktor (Kotlin/JVM) server. It exists for one reason: the secrets must never be inside the Android APK.
 
-## Running it locally
+* **AI provider keys** (Mistral / Groq / OpenRouter / any OpenAI-compatible endpoint) live here, in environment variables.
+* **The Google OAuth client secret** lives here. The phone only ever hands over a one-time authorization code.
+* Nothing is stored: no database, no files. After linking Google, the refresh token is **encrypted** (AES-256-GCM, key derived from
+  `TOKEN_ENCRYPTION_KEY`) and given to the phone to keep. Free hosts wipe the disk whenever a service sleeps or redeploys; this design
+  does not care.
 
-Requires JDK 17 (matches `kotlin { jvmToolchain(17) }` in `backend/build.gradle.kts`).
+It never depends on Google to run: Google Workspace is optional, and AI works with just one free provider key.
+
+## Run it
 
 ```bash
-export GEMINI_API_KEY="..."                 # required
-export GOOGLE_OAUTH_CLIENT_ID="..."         # required — a "Web application" OAuth client, NOT the
-                                             # Android app's own OAuth client (see below)
-export GOOGLE_OAUTH_CLIENT_SECRET="..."     # required
-export GOOGLE_OAUTH_REDIRECT_URI=""         # optional, empty string is correct for this flow
-export GEMINI_MODEL="gemini-3.5-flash"      # optional, this is already the default
-export PORT=8080                            # optional, this is already the default
-
-./gradlew :backend:run
+cp .env.example .env                 # fill in APP_API_KEY and at least one provider key
+set -a; source .env; set +a
+./gradlew :backend:run               # from the repository root; listens on $PORT (default 8080)
+./gradlew :backend:test              # unit tests
+docker build -t inventory-smart-ai-backend .   # repository root; this is what hosting platforms build
 ```
 
-`./gradlew :backend:build` and `./gradlew :backend:test` (also covered by the root `./gradlew
-test`/`./gradlew build`) do **not** require any of the above to be set — `AppConfig` only reads
-environment variables lazily, the first time something actually needs them (a real HTTP request
-comes in), never at class-load or compile time. This is deliberate: CI can compile and unit-test
-this module with zero secrets configured, per the Phase 4 spec's "do not call real external
-services during unit tests".
+If the environment is wrong the server prints **every** problem at once and exits with code 1 (see `config/ServerConfig.kt`).
 
-### Why a *separate* OAuth client from the Android app
+## Environment variables
 
-The Android app authenticates the user and asks for scope **authorization** using its own
-Android-type OAuth client (configured in Google Cloud Console as an "Android" application, tied to
-the app's package name + signing certificate — no client secret exists for this type). It then
-requests a one-time **server auth code** (`AuthorizationClient` + `.requestOfflineAccess(...)`,
-naming *this backend's* OAuth client id as the audience) and sends that single-use code here. This
-backend exchanges it, using its own "Web application" client id + secret, for a refresh token —
-exactly the flow Google's own docs describe for "a mobile client with a separate backend that needs
-offline access". The two client ids are deliberately different objects in Google Cloud Console; the
-Android client has no secret capable of being extracted from the APK, and the web client's secret
-never leaves this backend's environment.
+| Variable | Required | Meaning |
+|---|---|---|
+| `APP_API_KEY` | **yes** (≥16 chars) | Shared secret; the app sends it as `X-App-Key` (the app's `BACKEND_APP_KEY` build setting). |
+| `MISTRAL_API_KEY` `GROQ_API_KEY` `OPENROUTER_API_KEY` | **at least one** | Free provider keys. Mistral also enables OCR (best for Arabic documents). |
+| `CUSTOM_AI_BASE_URL` `CUSTOM_AI_API_KEY` `CUSTOM_AI_TEXT_MODEL` | all three or none | Any other OpenAI-compatible endpoint (`CUSTOM_AI_VISION_MODEL`, `CUSTOM_AI_LABEL` optional). |
+| `AI_PROVIDER_ORDER` | no | Priority, e.g. `mistral,groq,openrouter` (default). Unlisted configured providers go last. |
+| `*_TEXT_MODEL` `*_VISION_MODEL` `MISTRAL_OCR_MODEL` | no | Override a model id without a code change (ids change often on free tiers). |
+| `GOOGLE_OAUTH_CLIENT_ID` `GOOGLE_OAUTH_CLIENT_SECRET` `TOKEN_ENCRYPTION_KEY` | all or none | Enable Google Workspace. The client must be a **Web application** client. `TOKEN_ENCRYPTION_KEY` ≥32 chars; changing it logs everyone out of Google. |
+| `PORT` | no (8080) | Most hosts inject it. |
+| `RATE_LIMIT_CHAT_PER_MINUTE` `RATE_LIMIT_EXTRACT_PER_MINUTE` `RATE_LIMIT_WORKSPACE_PER_MINUTE` | no (30 / 6 / 20) | Per client and per minute. |
+| `DAILY_AI_REQUEST_CAP` | no (1500, `0` = off) | Global ceiling on chat + extraction requests per UTC day — protects your free quota if the app key leaks. |
+| `MAX_UPLOAD_BYTES` `PROVIDER_TIMEOUT_SECONDS` `AI_TOTAL_TIMEOUT_SECONDS` | no (10 MB / 40 / 100) | Limits. |
+| `TRUST_PROXY_HEADERS` | no (true) | Read the client address from `X-Forwarded-For` (last hop). Set `false` only without a proxy. |
+| `APP_AUTH_DISABLED=true` | no | **Local development only**: skips the `X-App-Key` check. |
 
-## API surface
+## API
 
-All request/response bodies are JSON (see `routes/dto/Dtos.kt`); errors are always
-`{"error": {"code": "...", "message": "..."}}` with a matching HTTP status (see `Application.kt`'s
-`StatusPages` config for the full mapping).
+Every route except `GET /` and `GET /health` needs `X-App-Key`. Errors are always
+`{"error": {"code": "...", "message": "<Arabic, user-facing>"}}`; `429` and `503` may carry `Retry-After`.
 
 | Route | Purpose |
 |---|---|
-| `POST /v1/assistant/message` | Start/continue a chat turn. Returns `{"type":"final",...}` or `{"type":"toolCalls","calls":[...]}`. |
-| `POST /v1/assistant/continue` | App submits results for one or more `LOCAL`-site tool calls it already executed against Room. |
-| `POST /v1/assistant/executeBackendTool` | App tells the backend the user approved/declined one `BACKEND`-site write tool; only executes it (for real) if approved. |
-| `POST /v1/documents/extract` | multipart: `file` + `documentType` + `sessionId` → structured JSON per `gemini/ExtractionSchemas.kt`. |
-| `POST /v1/auth/google/link` | Exchange the app's one-time server auth code for tokens. |
-| `GET /v1/auth/google/status` | `?sessionId=...` → `{"linked": true/false, "grantedScopes": [...]}`. |
-| `POST /v1/auth/google/unlink` | Forgets the session's stored tokens. |
-| `POST /v1/drive/ensureFolders`, `GET /v1/drive/list`, `POST /v1/drive/upload` | Direct Drive actions (outside the chat flow). |
-| `POST /v1/sheets/ensureMaster`, `POST /v1/sheets/export`, `GET /v1/sheets/read` | Direct Sheets actions. |
-| `POST /v1/docs/create`, `POST /v1/gmail/send`, `POST /v1/calendar/events` | Direct Docs/Gmail/Calendar actions — same underlying code as the assistant's confirmed tool calls (`google/BackendToolExecutor.kt`), so behaviour is identical whichever way the user triggered it. |
-| `GET /v1/status?sessionId=...` | Google Services status screen data (see spec's exact Arabic labels). |
-| `GET /health` | Plain liveness check. |
+| `GET /health` | Public liveness probe (`{"status":"ok"}`); also what the app pings to wake a sleeping free host. |
+| `POST /v1/ai/chat` | One assistant turn. Body `{messages, tools?, temperature?, maxTokens?, sessionId?}` (OpenAI message format). Returns `{message:{role,content,tool_calls?}, provider, model, finishReason}`. **No server-side conversation state**: the app sends the history every time and runs the tools itself. |
+| `POST /v1/documents/extract` | `multipart/form-data`: one or more `file` parts (a single PDF **or** up to 5 page images JPEG/PNG/WebP), `documentType` (`PRODUCTS`, `SALES_INVOICES`, …), optional `sessionId`, `preferOcr`. Returns `{documentType, result, provider, model, usedOcr}`. `422 PDF_NEEDS_IMAGES` = "could not read that PDF — send its pages as images" (the server never rasterises PDFs). |
+| `POST /v1/auth/google/link` | `{sessionId, serverAuthCode}` → `{linked, grantedScopes, linkToken}`. The app stores `linkToken`. |
+| `GET /v1/auth/google/status?sessionId=` | Local check of the `X-Google-Link` header → `{linked, grantedScopes}`. |
+| `POST /v1/auth/google/unlink` | Revokes the grant at Google (best effort). The app then deletes its token. |
+| `GET /v1/status?sessionId=&verifyAi=` | `{ai, aiProviders, googleConfigured, drive, sheets, docs, gmail, calendar}` with the four Arabic status labels. `verifyAi=true` spends one tiny real AI request. |
+| `POST /v1/drive/ensureFolders` · `GET /v1/drive/list` · `POST /v1/drive/upload` · `POST /v1/drive/saveReport` | Drive. |
+| `POST /v1/sheets/ensureMaster` · `POST /v1/sheets/export` · `GET /v1/sheets/read` | Sheets. |
+| `POST /v1/docs/create` · `POST /v1/gmail/send` · `POST /v1/calendar/events` | Docs, Gmail, Calendar. |
 
-## Known limitations (see root README.md for the full Phase 4 report)
+The Workspace routes (and `X-Google-Link` handling) assume the app already showed the user an explicit confirmation — the server does not ask again.
+`X-Google-Link` carries the sealed token; it opens only for the `sessionId` it was issued to.
 
-- **Token storage is a local JSON file** (`auth/TokenStore.kt`'s `FileTokenStore`), not encrypted,
-  not shared across instances. Fine for development/single-instance use; swap for a real encrypted
-  datastore behind the same `TokenStore` interface before any multi-instance or production
-  deployment — nothing else in the backend would need to change.
-- **Conversation state is in-memory** (`assistant/AssistantOrchestrator.kt`'s
-  `InMemoryConversationStore`) — an in-progress chat's Gemini thread is lost on restart. Acceptable
-  trade-off for the same reason (this backend has no database); swap for Redis/etc. if ever run as
-  more than one instance.
-- **No generated Google API client libraries.** Drive/Sheets/Docs/Gmail/Calendar are thin
-  hand-written REST wrappers (`google/GoogleWorkspaceClients.kt`) instead of the official
-  `google-api-services-*` Java client libraries. This was a deliberate choice, not an oversight:
-  those libraries use compound version strings (`v3-revYYYYMMDD-2.0.0` style) that could not be
-  checked against a real current release without guessing — exactly the failure mode
-  `android-kotlin-build-compatibility.md`'s "rule zero" warns about. The trade-off is a smaller,
-  fully-understood surface instead of the full generated API.
-- **The master spreadsheet/Drive folder ids are looked up by name on every call** rather than
-  cached — correct, but does a few extra Drive API calls per action. Fine at this scale; cache
-  alongside the token row if this becomes a real bottleneck.
-- **No rate limiting / abuse protection** on this backend's own routes — add before exposing it
-  outside a trusted app-to-backend link.
+## Behaviour worth knowing
+
+* **Provider fallback** (`ai/AiGateway.kt`): providers are tried in priority order. A rate-limited provider cools down for its `Retry-After`
+  (default 60 s), a rejected key for 10 min, a failing/slow one for 20 s; an unusable answer (empty, invalid JSON) falls through with no cooldown.
+  If every provider is cooling down the request fails fast with the right code (`AI_QUOTA_EXCEEDED`, `AI_INVALID_KEY` or `AI_UNAVAILABLE`).
+* **Document pipeline** (`ai/DocumentExtractor.kt`): Mistral OCR reads the file → the first working provider structures the text into the JSON
+  schema (`ai/ExtractionSchemas.kt`) → invalid JSON falls to the next provider → images (never PDFs) fall back to vision models. The result is
+  only a *draft*; the app still validates it and a human reviews it before anything is saved.
+* **Abuse limits** (`security/RequestGuard.kt`): app key (constant-time compare) → per-client rate limit → global daily cap. An app key inside an APK can
+  be extracted by a determined person, so the daily cap and rate limits are the real protection; rotate `APP_API_KEY` if it leaks.
+* **Logging**: one JSON audit line per AI/Workspace action (`audit/AuditLog.kt`) — ids and counts only, never content, tokens or keys.
+
+## Free hosting notes
+
+Anything that runs a Docker image works (the root `Dockerfile` builds only this module). `render.yaml` is a ready Render Blueprint.
+A free instance that sleeps costs a one-minute first request; nothing else is lost because nothing is stored. The Android app wakes the
+server in the background when it starts.

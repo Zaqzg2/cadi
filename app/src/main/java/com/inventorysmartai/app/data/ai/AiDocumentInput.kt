@@ -1,7 +1,7 @@
 package com.inventorysmartai.app.data.ai
 
 /**
- * File-handling helpers for the AI extraction path. Pure Kotlin (no Android, no Firebase), so they are
+ * File-handling helpers for the AI extraction path. Pure Kotlin (no Android), so they are
  * unit-tested on the plain JVM.
  */
 object AiDocumentInput {
@@ -29,7 +29,7 @@ object AiDocumentInput {
 
     /**
      * HEIC / HEIF phone photos, from the ISO-BMFF "ftyp" brand. Other files in the same container family
-     * (AVIF, MP4, MOV, ...) are not images Gemini is sent here, so they stay unrecognised.
+     * (AVIF, MP4, MOV, ...) are not images the model is sent here, so they stay unrecognised.
      */
     private fun heifFamilyMimeType(bytes: ByteArray): String? = when (isoBaseMediaBrand(bytes)) {
         "heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs" -> "image/heic"

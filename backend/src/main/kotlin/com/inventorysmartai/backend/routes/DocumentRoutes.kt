@@ -1,11 +1,14 @@
 package com.inventorysmartai.backend.routes
 
+import com.inventorysmartai.backend.ai.DocumentExtractor
+import com.inventorysmartai.backend.ai.ExtractionDocumentType
+import com.inventorysmartai.backend.ai.RequestRejectedException
+import com.inventorysmartai.backend.ai.UploadedFile
 import com.inventorysmartai.backend.audit.AuditLog
-import com.inventorysmartai.backend.gemini.ExtractionDocumentType
-import com.inventorysmartai.backend.gemini.ExtractionSchemas
-import com.inventorysmartai.backend.gemini.GeminiClient
-import com.inventorysmartai.backend.gemini.GeminiContent
 import com.inventorysmartai.backend.routes.dto.DocumentExtractionResponseDto
+import com.inventorysmartai.backend.security.Bucket
+import com.inventorysmartai.backend.security.RequestGuard
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
 import io.ktor.server.request.receiveMultipart
@@ -14,29 +17,42 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
-import java.util.Base64
+
+/** Extra bytes a multipart envelope adds around the file(s). */
+private const val MULTIPART_OVERHEAD = 64L * 1024
 
 /**
- * multipart/form-data body: a "file" part (the PDF/image bytes), a "documentType" text part (one
- * of [ExtractionDocumentType]'s names), and a "sessionId" text part (used only for the audit log —
- * document extraction needs no Google token, only Gemini's).
+ * POST /v1/documents/extract — multipart/form-data:
+ *  - one or more "file" parts: a single PDF, OR up to 5 page images (JPEG/PNG/WebP, in page order);
+ *  - "documentType": one of [ExtractionDocumentType];
+ *  - "sessionId" (optional, audit only) and "preferOcr" (optional, "false" skips OCR).
+ * 422 PDF_NEEDS_IMAGES means "I could not read that PDF — send its pages as images".
  */
-fun Route.documentRoutes(geminiClient: GeminiClient, auditLog: AuditLog) {
+fun Route.documentRoutes(extractor: DocumentExtractor, guard: RequestGuard, audit: AuditLog, maxUploadBytes: Int) {
     post("/v1/documents/extract") {
-        var fileBytes: ByteArray? = null
-        var mimeType: String = "application/octet-stream"
+        if (!guard.admit(call, Bucket.EXTRACT)) return@post
+        if (!guard.bodyWithin(call, maxUploadBytes + MULTIPART_OVERHEAD)) return@post
+
+        val files = mutableListOf<UploadedFile>()
         var documentTypeRaw: String? = null
-        var sessionId: String = "unknown"
+        var sessionId = "unknown"
+        var preferOcr = true
+        var totalBytes = 0L
 
         call.receiveMultipart().forEachPart { part ->
             when (part) {
                 is PartData.FileItem -> {
-                    mimeType = part.contentType?.toString() ?: mimeType
-                    fileBytes = part.provider().readRemaining().readByteArray()
+                    val bytes = part.provider().readRemaining().readByteArray()
+                    totalBytes += bytes.size
+                    if (totalBytes > maxUploadBytes) {
+                        throw RequestRejectedException(413, "PAYLOAD_TOO_LARGE", "حجم الملف أكبر من الحد المسموح (${maxUploadBytes / (1024 * 1024)} ميغابايت)")
+                    }
+                    files += UploadedFile(sniffMimeType(bytes, part.contentType?.toString()), bytes)
                 }
                 is PartData.FormItem -> when (part.name) {
                     "documentType" -> documentTypeRaw = part.value
-                    "sessionId" -> sessionId = part.value
+                    "sessionId" -> sessionId = part.value.take(64)
+                    "preferOcr" -> preferOcr = !part.value.equals("false", ignoreCase = true)
                     else -> Unit
                 }
                 else -> Unit
@@ -44,31 +60,48 @@ fun Route.documentRoutes(geminiClient: GeminiClient, auditLog: AuditLog) {
             part.dispose()
         }
 
-        val bytes = fileBytes ?: run {
-            call.respond(io.ktor.http.HttpStatusCode.BadRequest, mapOf("error" to mapOf("code" to "MISSING_FILE", "message" to "No \"file\" part in the request")))
+        if (files.isEmpty()) {
+            call.respondError(HttpStatusCode.BadRequest, "MISSING_FILE", "لم يُرسل أي ملف في الطلب")
             return@post
         }
-        val documentType = documentTypeRaw?.let { runCatching { ExtractionDocumentType.valueOf(it) }.getOrNull() } ?: run {
-            call.respond(
-                io.ktor.http.HttpStatusCode.BadRequest,
-                mapOf("error" to mapOf("code" to "INVALID_DOCUMENT_TYPE", "message" to "\"documentType\" must be one of ${ExtractionDocumentType.entries.map { it.name }}"))
+        val documentType = documentTypeRaw?.let { raw -> ExtractionDocumentType.entries.firstOrNull { it.name == raw } }
+        if (documentType == null) {
+            call.respondError(
+                HttpStatusCode.BadRequest,
+                "INVALID_DOCUMENT_TYPE",
+                "documentType يجب أن يكون واحدًا من: ${ExtractionDocumentType.entries.joinToString { it.name }}"
             )
             return@post
         }
 
-        val base64 = Base64.getEncoder().encodeToString(bytes)
-        val contentPart = if (mimeType.startsWith("image/")) {
-            GeminiContent.imageBase64(base64, mimeType)
-        } else {
-            GeminiContent.documentBase64(base64, if (mimeType == "application/octet-stream") "application/pdf" else mimeType)
-        }
+        val outcome = extractor.extract(documentType, files, preferOcr)
 
-        val input = GeminiContent.array(GeminiContent.text(ExtractionSchemas.instructionFor(documentType)), contentPart)
-        val schema = ExtractionSchemas.forDocumentType(documentType)
-        val extracted = geminiClient.createStructured(input = input, jsonSchema = schema, schemaName = documentType.name)
+        audit.record(
+            "AI_IMPORT",
+            sessionId,
+            mapOf(
+                "documentType" to documentType.name,
+                "files" to files.size.toString(),
+                "sizeBytes" to totalBytes.toString(),
+                "provider" to outcome.providerId,
+                "ocr" to outcome.usedOcr.toString()
+            )
+        )
 
-        auditLog.record("AI_IMPORT", sessionId, mapOf("documentType" to documentType.name, "sizeBytes" to bytes.size.toString()))
+        call.respond(DocumentExtractionResponseDto(documentType.name, outcome.result, outcome.providerId, outcome.model, outcome.usedOcr))
+    }
+}
 
-        call.respond(DocumentExtractionResponseDto(documentType = documentType.name, result = extracted))
+/** What the bytes really are (the declared content type is only a fallback): PDF, JPEG, PNG or WebP. */
+internal fun sniffMimeType(bytes: ByteArray, declared: String?): String {
+    fun starts(vararg signature: Int): Boolean =
+        bytes.size >= signature.size && signature.indices.all { (bytes[it].toInt() and 0xFF) == signature[it] }
+
+    return when {
+        starts(0x25, 0x50, 0x44, 0x46) -> "application/pdf"
+        starts(0xFF, 0xD8, 0xFF) -> "image/jpeg"
+        starts(0x89, 0x50, 0x4E, 0x47) -> "image/png"
+        bytes.size >= 12 && starts(0x52, 0x49, 0x46, 0x46) && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP" -> "image/webp"
+        else -> declared?.substringBefore(';')?.trim()?.lowercase() ?: "application/octet-stream"
     }
 }

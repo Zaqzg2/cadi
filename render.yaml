@@ -1,0 +1,30 @@
+# Render Blueprint — "New > Blueprint" in the Render dashboard, pick this repository, fill the secrets marked "sync: false".
+# Free plan: 512 MB RAM, sleeps after 15 idle minutes (the first request afterwards takes about a minute).
+# The backend keeps no state on disk, so sleeping and restarting lose nothing.
+services:
+  - type: web
+    name: inventory-smart-ai-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Generated once by Render. Copy APP_API_KEY into the Android build as BACKEND_APP_KEY (see backend/README.md).
+      - key: APP_API_KEY
+        generateValue: true
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+      # At least ONE AI provider key is required. All three are free to create; more keys = more free quota.
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      # Optional — only for the Google Drive/Sheets/Docs/Gmail/Calendar features.
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false

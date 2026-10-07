@@ -4,8 +4,8 @@
 
     <!--
       Phases 1-3 were fully offline by design. Phase 4 adds real network calls: to this app's own
-      backend (assistant, paused), to Firebase AI Logic, and - when the user saves their own API keys in
-      Settings - directly to Mistral / Groq / OpenRouter. So INTERNET is required.
+      backend (the default path for the assistant, document import and Google Workspace) and - only when the
+      user turns on "use my own keys" in Settings - directly to Mistral / Groq / OpenRouter. So INTERNET is required.
       Deliberately NOT added: CAMERA and any storage permission. Photo capture is delegated to the
       system camera app (ACTION_IMAGE_CAPTURE through a FileProvider) and barcode scanning to Google
       Play services' code scanner, neither of which needs the app to hold the CAMERA permission;

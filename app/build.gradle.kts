@@ -8,17 +8,6 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-// Firebase (AI Logic + App Check). google-services.json is downloaded from YOUR Firebase project and is
-// not in the repo, so the plugin is applied only when the file is present. Without it the app still
-// builds and runs — everything except the AI features works, and those say "not configured" — which
-// is also what keeps CI green before the file is added. NOTE: the debug build type has
-// applicationIdSuffix ".debug", so the file must list BOTH com.inventorysmartai.app and
-// com.inventorysmartai.app.debug (register both Android apps in the Firebase console), otherwise the
-// plugin fails with "No matching client found for package name".
-if (file("google-services.json").exists()) {
-    apply(plugin = "com.google.gms.google-services")
-}
-
 // Values that differ per developer/deployment. Resolution order: -P flag / gradle.properties, then an
 // environment variable of the same name, then the old placeholder (the app detects the placeholder and
 // tells the user exactly what is missing instead of failing with a generic error).
@@ -27,7 +16,11 @@ fun configValue(name: String, fallback: String): String =
         ?: System.getenv(name)?.takeIf { it.isNotBlank() }
         ?: fallback
 
-val googleServerClientId = configValue("GOOGLE_BACKEND_SERVER_CLIENT_ID", "870544200288-g3tnk26k4kmi8ajqq7i56kp2rt29a17n.apps.googleusercontent.com")
+val googleServerClientId = configValue("GOOGLE_BACKEND_SERVER_CLIENT_ID", "CHANGE-ME.apps.googleusercontent.com")
+// The shared secret the backend expects in the X-App-Key header (its APP_API_KEY). Empty until configured — the app then
+// says exactly that instead of failing with a generic network error. NOTE: anything compiled into an APK can be
+// extracted by a determined person; the backend's rate limits and daily cap are what bound the damage (see backend/README.md).
+val backendAppKey = configValue("BACKEND_APP_KEY", "")
 val backendUrlDebug = configValue("BACKEND_BASE_URL_DEBUG", "http://10.0.2.2:8080/")
 val backendUrlRelease = configValue("BACKEND_BASE_URL", "https://CHANGE-ME.example.com/")
 
@@ -40,7 +33,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.4.0" // Phase 4: AI + Google ecosystem + Smart Assistant.
+        versionName = "0.5.0" // The backend is the default path for every AI feature.
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -52,12 +45,12 @@ android {
         // Override without editing code: -PGOOGLE_BACKEND_SERVER_CLIENT_ID=... , gradle.properties, or the
         // same-named environment variable (e.g. a GitHub Actions secret).
         buildConfigField("String", "GOOGLE_BACKEND_SERVER_CLIENT_ID", "\"$googleServerClientId\"")
+        buildConfigField("String", "BACKEND_APP_KEY", "\"${backendAppKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
     // A FIXED debug signing key. Without it every CI run signs the debug APK with a freshly generated key,
     // so a new APK can never be installed over the previous one — you must uninstall first, which wipes
-    // the app's data (the local database) and its Firebase App Check debug token, forcing a new token to
-    // be registered after every build. This is the conventional shared debug key (alias "androiddebugkey",
+    // the app's data (the local database). This is the conventional shared debug key (alias "androiddebugkey",
     // password "android"), not a secret, and it signs debug builds only. If the file is missing the build
     // falls back to Android's per-machine default, exactly as before. The first build with it must be
     // installed after uninstalling the old one once (the signatures differ); after that, updates keep data.
@@ -90,7 +83,7 @@ android {
             // 10.0.2.2 is the Android emulator's alias for the host machine's localhost — run
             // `./gradlew :backend:run` on the same machine the emulator runs on. A physical
             // device needs the host's real LAN IP instead.
-            buildConfigField("String", "BACKEND_BASE_URL", "\"https://cadi-9qmu.onrender.com/\"")
+            buildConfigField("String", "BACKEND_BASE_URL", "\"${backendUrlDebug}\"")
         }
     }
 
@@ -158,8 +151,7 @@ dependencies {
     implementation(libs.fastexcel.reader)
     // CSV is hand-parsed (see data/importing/parser/CsvImportParser.kt) — no dependency needed.
 
-    // --- Phase 4: networking to this app's own backend (paused for now; see the backend module's
-    // README). AI document extraction does NOT go through it — see Firebase AI Logic below. ---
+    // --- Networking to this app's own backend (the default path for AI and Google Workspace; see backend/README.md). ---
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.moshi)
     implementation(libs.okhttp)
@@ -178,15 +170,6 @@ dependencies {
 
     // Barcode scanner (Data Center "الباركود" tile + Inventory scan button).
     implementation(libs.play.services.code.scanner)
-
-    // Firebase AI Logic: the app calls Gemini itself, and App Check (Play Integrity in release, the debug
-    // provider in debug — see src/debug and src/release AppCheckInstaller) proves the call comes from this
-    // app, so no API key ships in the APK. The debug provider is debugImplementation so it cannot reach a
-    // release build. Versions come from the BoM.
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.ai)
-    implementation(libs.firebase.appcheck.playintegrity)
-    debugImplementation(libs.firebase.appcheck.debug)
 
     testImplementation(libs.junit)
     testImplementation(libs.fastexcel.writer) // builds real .xlsx fixtures for ExcelImportParser tests

@@ -1,141 +1,219 @@
 package com.inventorysmartai.app.data.assistant
 
-import com.inventorysmartai.app.data.remote.BackendApi
-import com.inventorysmartai.app.data.remote.BackendFailure
-import com.inventorysmartai.app.data.remote.safeApiCall
-import com.inventorysmartai.app.data.remote.dto.AssistantTurnResponseDto
-import com.inventorysmartai.app.data.remote.dto.ContinueRequest
-import com.inventorysmartai.app.data.remote.dto.ExecuteBackendToolRequest
-import com.inventorysmartai.app.data.remote.dto.PendingToolCallDto
-import com.inventorysmartai.app.data.remote.dto.SendMessageRequest
-import com.inventorysmartai.app.data.remote.dto.ToolResultDto
+import com.inventorysmartai.app.data.ai.provider.AiChatResult
+import com.inventorysmartai.app.data.ai.provider.AiToolCall
+import com.inventorysmartai.app.data.ai.provider.OpenAiMessageSanitizer
+import com.inventorysmartai.app.data.ai.provider.toProviderFailure
+import com.inventorysmartai.app.data.backend.AiChatGateway
 import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
 import com.inventorysmartai.app.domain.assistant.LocalToolExecutor
 import com.inventorysmartai.app.domain.assistant.ToolExecutionSite
 import com.inventorysmartai.app.domain.repository.AssistantRepository
-import com.inventorysmartai.app.domain.repository.DeviceSessionRepository
-import com.squareup.moshi.Moshi
-import org.json.JSONObject
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * See domain/repository/AiRepositories.kt's [AssistantRepository] doc for the overall design.
- * Every call to the backend can come back one of two ways (`AssistantTurnResponseDto.type`):
- *  - "final": done, show the text.
- *  - "toolCalls": one or more tools need to run first. Read-only [ToolExecutionSite.LOCAL] calls
- *    are executed immediately and silently (the app is simply answering Gemini's own question
- *    about the user's data — nothing to confirm); anything else (a write, local or backend) stops
- *    here and surfaces [AssistantStepResult.ConfirmationRequired] instead, per the spec's
- *    "ACTION CONFIRMATION" rule that only read-only actions run without asking first.
+ * The smart assistant. The tool-calling loop runs on the phone — the tools read and write the local Room database, which
+ * only exists here — and only the model call itself goes out, through [gateway]: the app's own backend by default, or the
+ * person's own provider keys when they opted in (see data/backend/RoutingChatGateway.kt).
+ *
+ * Contract with the ViewModel: read-only tools run silently, a write tool (createPurchaseRequest, or one of the four Google
+ * Workspace tools) stops with [AssistantStepResult.ConfirmationRequired] until the person answers, and the ViewModel only
+ * ever sees Final / ConfirmationRequired / Error. The conversation is a neutral OpenAI-format list kept in memory (it is lost
+ * when the app process dies) and sent in full with every turn, so the server needs no state of its own and a conversation
+ * can carry on with a different provider — or a different route — after a rate limit.
  */
 @Singleton
 class AssistantRepositoryImpl @Inject constructor(
-    private val api: BackendApi,
-    private val sessionRepository: DeviceSessionRepository,
-    private val localToolExecutor: LocalToolExecutor,
-    private val moshi: Moshi
+    private val gateway: AiChatGateway,
+    private val localToolExecutor: LocalToolExecutor
 ) : AssistantRepository {
 
-    /** The one pending write call per conversation, remembered between [sendMessage]/its
-     *  follow-ups returning [AssistantStepResult.ConfirmationRequired] and the matching
-     *  [confirmPendingAction] — a conversation only ever has one open confirmation at a time
-     *  (the UI blocks on it before the person can send anything else). */
-    private val pendingByConversation = ConcurrentHashMap<String, PendingToolCallDto>()
-
-    override suspend fun sendMessage(conversationId: String, message: String, context: AssistantContext?): AssistantStepResult {
-        return runCatching {
-            val sessionId = sessionRepository.getSessionId()
-            val response = safeApiCall(moshi) {
-                api.sendAssistantMessage(SendMessageRequest(sessionId, conversationId, message, context?.toPromptText()))
-            }.getOrThrow()
-            continueLoop(conversationId, response, usedLocalData = false, roundsLeft = MAX_ROUNDS)
-        }.getOrElse { AssistantStepResult.Error(mapErrorMessage(it)) }
+    /** One assistant message's tool calls, resolved one by one; OpenAI-format requires a reply for every id. */
+    private class PendingTurn(
+        val calls: List<AiToolCall>,
+        var usedLocalData: Boolean
+    ) {
+        val results: MutableMap<String, String> = LinkedHashMap()
+        var awaiting: AiToolCall? = null
     }
 
-    override suspend fun confirmPendingAction(conversationId: String, approved: Boolean): AssistantStepResult {
-        val pending = pendingByConversation.remove(conversationId)
-            ?: return AssistantStepResult.Error("لا يوجد إجراء بانتظار التأكيد لهذه المحادثة")
-
-        return runCatching {
-            val sessionId = sessionRepository.getSessionId()
-            val response = safeApiCall(moshi) {
-                if (pending.site == "LOCAL") {
-                    val resultText = if (approved) {
-                        localToolExecutor.execute(pending.name, JSONObject(pending.arguments).toString())
-                    } else {
-                        DECLINED_RESULT_JSON
-                    }
-                    api.continueAssistant(ContinueRequest(conversationId, listOf(ToolResultDto(pending.callId, pending.name, resultText))))
-                } else {
-                    api.executeBackendTool(
-                        ExecuteBackendToolRequest(conversationId, sessionId, pending.callId, pending.name, pending.arguments, approved)
-                    )
-                }
-            }.getOrThrow()
-            continueLoop(conversationId, response, usedLocalData = pending.site == "LOCAL" && approved, roundsLeft = MAX_ROUNDS)
-        }.getOrElse { AssistantStepResult.Error(mapErrorMessage(it)) }
+    private sealed interface Step {
+        data object Done : Step
+        data class NeedsConfirmation(val result: AssistantStepResult.ConfirmationRequired) : Step
     }
 
-    private suspend fun continueLoop(
+    private val histories = ConcurrentHashMap<String, MutableList<Map<String, Any?>>>()
+    private val pending = ConcurrentHashMap<String, PendingTurn>()
+    private val lock = Mutex()
+
+    override suspend fun sendMessage(
         conversationId: String,
-        response: AssistantTurnResponseDto,
-        usedLocalData: Boolean,
-        roundsLeft: Int
-    ): AssistantStepResult {
-        val calls = response.calls.orEmpty()
-        if (response.type != "toolCalls" || calls.isEmpty()) {
-            return AssistantStepResult.Final(response.text.orEmpty(), usedLocalData)
+        message: String,
+        context: AssistantContext?
+    ): AssistantStepResult = lock.withLock { sendInternal(conversationId, message, context) }
+
+    override suspend fun confirmPendingAction(conversationId: String, approved: Boolean): AssistantStepResult =
+        lock.withLock { confirmInternal(conversationId, approved) }
+
+    // ---- send ----
+
+    private suspend fun sendInternal(conversationId: String, message: String, context: AssistantContext?): AssistantStepResult {
+        val history = histories.getOrPut(conversationId) {
+            mutableListOf(mapOf("role" to "system", "content" to AssistantToolCatalog.systemPrompt))
         }
-        if (roundsLeft <= 0) {
-            // A genuinely pathological conversation (Gemini keeps asking for more tools without
-            // ever reaching a final answer) — stop rather than loop forever burning backend calls.
-            return AssistantStepResult.Error("تعذّر إكمال الطلب بعد عدة محاولات، يرجى إعادة صياغة السؤال")
+        abandonPending(conversationId, history)
+        // A failed earlier turn can leave the history ending on a tool result; Mistral rejects a user message right after one.
+        if (history.last()["role"] == "tool") {
+            history += mapOf("role" to "assistant", "content" to "تعذّر إكمال الرد السابق.")
         }
 
-        val readOnlyLocal = calls.filter { it.site == "LOCAL" && it.risk == "READ_ONLY" }
-        if (readOnlyLocal.isNotEmpty()) {
-            val results = readOnlyLocal.map { call ->
-                val resultText = localToolExecutor.execute(call.name, JSONObject(call.arguments).toString())
-                ToolResultDto(call.callId, call.name, resultText)
+        val mark = history.size
+        val content = context?.toPromptText()?.let { "سياق إضافي متاح للمحادثة:\n$it\n\n$message" } ?: message
+        history += mapOf("role" to "user", "content" to content)
+
+        return try {
+            runLoop(conversationId, history, usedLocalData = false)
+        } catch (e: CancellationException) {
+            rollback(history, mark)
+            throw e
+        } catch (e: Exception) {
+            rollback(history, mark)
+            AssistantStepResult.Error(e.toProviderFailure().messageAr)
+        }
+    }
+
+    /** A new message while a confirmation was still open: treat the open write as declined so the history stays valid. */
+    private suspend fun abandonPending(conversationId: String, history: MutableList<Map<String, Any?>>) {
+        val turn = pending.remove(conversationId) ?: return
+        turn.awaiting?.let { turn.results[it.id] = DECLINED_RESULT_JSON }
+        for (call in turn.calls) {
+            if (call.id in turn.results) continue
+            turn.results[call.id] = if (localToolExecutor.requiresConfirmation(call.name)) DECLINED_RESULT_JSON else runTool(call)
+        }
+        appendToolResults(history, turn)
+    }
+
+    private fun rollback(history: MutableList<Map<String, Any?>>, mark: Int) {
+        while (history.size > mark) history.removeAt(history.lastIndex)
+    }
+
+    // ---- confirm ----
+
+    private suspend fun confirmInternal(conversationId: String, approved: Boolean): AssistantStepResult {
+        val turn = pending[conversationId]
+        val call = turn?.awaiting
+        val history = histories[conversationId]
+        if (turn == null || call == null || history == null) {
+            return AssistantStepResult.Error("لا يوجد إجراء بانتظار التأكيد لهذه المحادثة")
+        }
+        return try {
+            turn.results[call.id] = if (approved) runTool(call).also { turn.usedLocalData = true } else DECLINED_RESULT_JSON
+            turn.awaiting = null
+            when (val step = advance(conversationId, history, turn)) {
+                is Step.NeedsConfirmation -> step.result
+                Step.Done -> runLoop(conversationId, history, turn.usedLocalData)
             }
-            val next = safeApiCall(moshi) { api.continueAssistant(ContinueRequest(conversationId, results)) }.getOrThrow()
-            return continueLoop(conversationId, next, usedLocalData = true, roundsLeft = roundsLeft - 1)
-        }
-
-        // Nothing left that can run silently — the next call (local write or any backend call,
-        // which is always a write per the tool catalog) needs the person's explicit confirmation.
-        val nextCall = calls.first()
-        pendingByConversation[conversationId] = nextCall
-        val site = if (nextCall.site == "LOCAL") ToolExecutionSite.LOCAL else ToolExecutionSite.BACKEND
-        val descriptionAr = if (site == ToolExecutionSite.LOCAL) {
-            localToolExecutor.describeForConfirmation(nextCall.name, JSONObject(nextCall.arguments).toString())
-        } else {
-            describeBackendAction(nextCall)
-        }
-        return AssistantStepResult.ConfirmationRequired(nextCall.callId, nextCall.name, site, descriptionAr)
-    }
-
-    private fun describeBackendAction(call: PendingToolCallDto): String {
-        fun arg(key: String) = call.arguments[key]?.toString().orEmpty()
-        return when (call.name) {
-            "saveReportToDrive" -> "حفظ التقرير \"${arg("title")}\" في Google Drive"
-            "createGoogleDoc" -> "إنشاء مستند Google Docs بعنوان \"${arg("title")}\""
-            "sendEmail" -> "إرسال بريد إلكتروني إلى ${arg("to")} بعنوان \"${arg("subject")}\""
-            "createCalendarEvent" -> "إضافة موعد \"${arg("title")}\" إلى تقويم Google"
-            else -> "تنفيذ العملية: ${call.name}"
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AssistantStepResult.Error(e.toProviderFailure().messageAr)
         }
     }
 
-    private fun mapErrorMessage(e: Throwable): String = when (e) {
-        is BackendFailure -> e.messageAr
-        else -> "حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى"
+    // ---- the tool-calling loop ----
+
+    private suspend fun runLoop(
+        conversationId: String,
+        history: MutableList<Map<String, Any?>>,
+        usedLocalData: Boolean
+    ): AssistantStepResult {
+        var usedLocal = usedLocalData
+        repeat(MAX_ROUNDS) {
+            val reply = chatOnce(history)
+            if (reply.toolCalls.isEmpty()) {
+                val text = reply.text.orEmpty()
+                history += mapOf("role" to "assistant", "content" to text)
+                return AssistantStepResult.Final(text, usedLocal)
+            }
+
+            history += mapOf(
+                "role" to "assistant",
+                "content" to reply.text.orEmpty(),
+                "tool_calls" to reply.toolCalls.map {
+                    mapOf("id" to it.id, "type" to "function", "function" to mapOf("name" to it.name, "arguments" to it.argumentsJson))
+                }
+            )
+            val turn = PendingTurn(reply.toolCalls, usedLocal)
+            val step = advance(conversationId, history, turn)
+            if (step is Step.NeedsConfirmation) return step.result
+            usedLocal = turn.usedLocalData
+        }
+        return AssistantStepResult.Error("تعذّر إكمال الطلب بعد عدة محاولات، يرجى إعادة صياغة السؤال")
     }
+
+    /** Runs every read-only call; stops at the first write call and asks the person. */
+    private suspend fun advance(conversationId: String, history: MutableList<Map<String, Any?>>, turn: PendingTurn): Step {
+        for (call in turn.calls) {
+            if (call.id in turn.results) continue
+            if (localToolExecutor.requiresConfirmation(call.name)) {
+                turn.awaiting = call
+                pending[conversationId] = turn
+                val description = localToolExecutor.describeForConfirmation(call.name, call.argumentsJson)
+                return Step.NeedsConfirmation(
+                    AssistantStepResult.ConfirmationRequired(call.id, call.name, siteOf(call.name), description)
+                )
+            }
+            turn.results[call.id] = runTool(call)
+            turn.usedLocalData = true
+        }
+        pending.remove(conversationId)
+        appendToolResults(history, turn)
+        return Step.Done
+    }
+
+    private fun appendToolResults(history: MutableList<Map<String, Any?>>, turn: PendingTurn) {
+        for (call in turn.calls) {
+            history += mapOf(
+                "role" to "tool",
+                "tool_call_id" to call.id,
+                "name" to call.name,
+                "content" to (turn.results[call.id] ?: DECLINED_RESULT_JSON)
+            )
+        }
+    }
+
+    private suspend fun runTool(call: AiToolCall): String = try {
+        val result = localToolExecutor.execute(call.name, call.argumentsJson)
+        // Free tiers have small per-minute token budgets; an oversized table is cut rather than rejected (413/429).
+        if (result.length > MAX_TOOL_RESULT_CHARS) result.take(MAX_TOOL_RESULT_CHARS) + "…[تم اقتطاع النتيجة]" else result
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        """{"error":"tool_failed","tool":"${call.name}"}"""
+    }
+
+    private fun siteOf(toolName: String): ToolExecutionSite =
+        if (toolName in AssistantToolCatalog.WORKSPACE_TOOL_NAMES) ToolExecutionSite.BACKEND else ToolExecutionSite.LOCAL
+
+    /** Free tiers have small tokens-per-minute budgets, so only the system prompt plus the recent turns are sent. */
+    private suspend fun chatOnce(history: List<Map<String, Any?>>): AiChatResult = gateway.chat(
+        messages = OpenAiMessageSanitizer.trimHistory(history, MAX_HISTORY_MESSAGES),
+        tools = AssistantToolCatalog.tools,
+        temperature = 0.2,
+        maxTokens = MAX_REPLY_TOKENS
+    )
 
     private companion object {
         const val MAX_ROUNDS = 6
+        const val MAX_HISTORY_MESSAGES = 30
+        const val MAX_TOOL_RESULT_CHARS = 8_000
+        const val MAX_REPLY_TOKENS = 2_000
         const val DECLINED_RESULT_JSON = """{"status":"declined_by_user"}"""
     }
 }

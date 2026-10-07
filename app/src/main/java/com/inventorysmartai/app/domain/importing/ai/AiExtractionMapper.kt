@@ -23,12 +23,12 @@ data class AiMappingResult(
  * The one bridge between Phase 4's AI extraction and the Phase 2/3 deterministic pipeline —
  * everything downstream of [toParsedRows] (validation, product matching, duplicate detection,
  * review, approval) is the exact same code a spreadsheet import uses (see domain/importing/
- * ImportPipeline.kt's `analyzeRows`). This class's only job is turning Gemini's field-name/raw-
+ * ImportPipeline.kt's `analyzeRows`). This class's only job is turning the model's field-name/raw-
  * text pairs into the pipeline's own [ParsedImportRow] shape:
  *  - each field's raw text goes through [Normalizer.normalize] — identical to what a spreadsheet
  *    cell's text would go through, so normalization is never a second, AI-specific implementation
  *    that could quietly disagree with the tabular one;
- *  - a field Gemini marked `uncertain`, or a warning Gemini attached to a row, becomes a
+ *  - a field the model marked `uncertain`, or a warning the model attached to a row, becomes a
  *    [ParsedImportRow.sourceWarnings] entry — the review screen's existing warnings display
  *    handles the rest, no new UI concept needed;
  *  - [ImportField] values not present in a particular schema (e.g. `TARGET_GROUP` only appears

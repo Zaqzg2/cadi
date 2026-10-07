@@ -1,7 +1,9 @@
 package com.inventorysmartai.app.di
 
-import com.inventorysmartai.app.data.assistant.RoutingAssistantRepository
-import com.inventorysmartai.app.data.assistant.DefaultLocalToolExecutor
+import com.inventorysmartai.app.data.assistant.AssistantRepositoryImpl
+import com.inventorysmartai.app.data.assistant.AssistantToolExecutor
+import com.inventorysmartai.app.data.backend.AiChatGateway
+import com.inventorysmartai.app.data.backend.RoutingChatGateway
 import com.inventorysmartai.app.data.google.DeviceSessionRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleAuthRepositoryImpl
 import com.inventorysmartai.app.data.google.GoogleServiceStatusRepositoryImpl
@@ -87,13 +89,12 @@ abstract class RepositoryModule {
     @Binds @Singleton abstract fun bindImportReviewManager(impl: DefaultImportReviewManager): ImportReviewManager
 
     // --- Phase 4: AI + Google ecosystem ---
-    @Binds @Singleton abstract fun bindAssistantRepository(impl: RoutingAssistantRepository): AssistantRepository
-    @Binds @Singleton abstract fun bindLocalToolExecutor(impl: DefaultLocalToolExecutor): LocalToolExecutor
-    // Both AI entry points go through a router: with at least one Groq/Mistral/OpenRouter key saved in
-    // Settings the phone calls those providers directly (Mistral OCR for Arabic documents, an on-device
-    // tool-calling loop for the assistant); with none saved, behaviour is exactly as before (Firebase AI Logic
-    // for documents, the backend for the assistant). To drop Firebase/the backend later, bind the Direct*
-    // implementations here and delete the Routing* classes.
+    // The BACKEND is the default route for every AI feature. The two routers below send a request to the backend, or — only when
+    // the person saved their own Groq/Mistral/OpenRouter keys and chose "use my own keys" (or the backend is unavailable and keys
+    // exist) — straight to those providers. The assistant's tool loop always runs on the phone against the local database.
+    @Binds @Singleton abstract fun bindAssistantRepository(impl: AssistantRepositoryImpl): AssistantRepository
+    @Binds @Singleton abstract fun bindLocalToolExecutor(impl: AssistantToolExecutor): LocalToolExecutor
+    @Binds @Singleton abstract fun bindAiChatGateway(impl: RoutingChatGateway): AiChatGateway
     @Binds @Singleton abstract fun bindAiDocumentImportRepository(impl: RoutingAiDocumentImportRepository): AiDocumentImportRepository
     @Binds @Singleton abstract fun bindDeviceSessionRepository(impl: DeviceSessionRepositoryImpl): DeviceSessionRepository
     @Binds @Singleton abstract fun bindGoogleAuthRepository(impl: GoogleAuthRepositoryImpl): GoogleAuthRepository

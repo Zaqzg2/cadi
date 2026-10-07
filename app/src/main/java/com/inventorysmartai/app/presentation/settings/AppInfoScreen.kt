@@ -25,11 +25,11 @@ fun AppInfoScreen(navController: NavController) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     InfoRow("اسم التطبيق", "Inventory Smart AI")
                     InfoRow("الإصدار", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                    InfoRow("المرحلة الحالية", "التأسيس فقط — بدون تكاملات خارجية بعد")
+                    InfoRow("المرحلة الحالية", "الخادم الخاص هو المسار الافتراضي للذكاء الاصطناعي وخدمات Google")
                 }
             }
             Text(
-                "سيتم لاحقاً دمج Gemini API وGoogle Drive/Sheets/Docs وGmail والتقويم وFirebase وقارئ الباركود والكاميرا واستيراد الملفات، وفق خارطة الطريق المتفق عليها.",
+                "يعمل الذكاء الاصطناعي وGoogle Drive/Sheets/Docs وGmail والتقويم عبر الخادم الخاص بالتطبيق، إضافةً إلى قارئ الباركود والكاميرا واستيراد الملفات، وفق خارطة الطريق المتفق عليها.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

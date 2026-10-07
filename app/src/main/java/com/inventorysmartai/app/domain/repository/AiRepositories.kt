@@ -6,10 +6,11 @@ import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocument
 import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocumentType
 import kotlinx.coroutines.flow.Flow
 
-/** Drives one Gemini Interactions API conversation via the backend (see backend/assistant/
- *  AssistantOrchestrator.kt) — everything about the tool-calling loop (which calls are LOCAL vs
- *  BACKEND, which need confirmation) is resolved internally; a ViewModel only ever sees
- *  [AssistantStepResult.Final] or [AssistantStepResult.ConfirmationRequired]. */
+/** Drives one assistant conversation. The tool-calling loop runs on the phone (tools read and write the local Room
+ *  database); only the model call itself goes out — through the backend by default, or directly to the user's own
+ *  provider keys when they opted in (see data/backend/RoutingChatGateway.kt). Everything about the loop (which calls
+ *  need confirmation, how results are fed back) is resolved internally; a ViewModel only ever sees
+ *  [AssistantStepResult.Final], [AssistantStepResult.ConfirmationRequired] or [AssistantStepResult.Error]. */
 interface AssistantRepository {
     suspend fun sendMessage(conversationId: String, message: String, context: AssistantContext?): AssistantStepResult
 
@@ -35,7 +36,7 @@ data class CalendarEventResult(val eventId: String?, val htmlLink: String?)
 
 /** Direct Google Workspace actions the app calls outside the assistant chat (e.g. a "حفظ في
  *  Drive" button on the Reports screen) — same underlying backend actions the assistant's
- *  confirmed tool calls use (backend google/BackendToolExecutor.kt), so behavior is identical
+ *  confirmed tool calls use (backend google/WorkspaceService.kt), so behavior is identical
  *  either way. Every method here is a write/send action; the caller is responsible for having
  *  already shown the Arabic confirmation dialog (spec: "ACTION CONFIRMATION") — this repository
  *  does not ask again. */
@@ -50,7 +51,12 @@ interface GoogleWorkspaceRepository {
 /** One [status] value per service, using the spec's exact four Arabic labels — see backend
  *  routes/StatusRoutes.kt, which is the sole source of truth for what these strings are. */
 data class GoogleServiceStatus(
-    val gemini: String,
+    /** The AI providers behind the backend ("متصل" when at least one answers). */
+    val ai: String,
+    /** Labels of the providers that are ready right now. */
+    val aiProviders: List<String>,
+    /** false when the server was deployed without a Google OAuth client (the Google rows then read "غير متصل" for everyone). */
+    val googleConfigured: Boolean,
     val drive: String,
     val sheets: String,
     val docs: String,
@@ -59,15 +65,15 @@ data class GoogleServiceStatus(
 )
 
 interface GoogleServiceStatusRepository {
-    suspend fun getStatus(verifyGemini: Boolean = false): Result<GoogleServiceStatus>
+    suspend fun getStatus(verifyAi: Boolean = false): Result<GoogleServiceStatus>
 }
 
-/** Phase 4's AI document-understanding pipeline entry point. [extract] only calls the backend and
- *  returns Gemini's structured result as-is — turning it into [com.inventorysmartai.app.domain.
+/** Phase 4's AI document-understanding pipeline entry point. [extract] only asks the AI (through the backend by default)
+ *  and returns its structured result as-is — turning it into [com.inventorysmartai.app.domain.
  *  importing.ParsedImportRow]s, running deterministic validation/matching, and persisting nothing
  *  without human review all happen afterwards via the existing [ImportRepository] +
  *  [com.inventorysmartai.app.domain.importing.ImportPipeline] (see domain/importing/ai/
- *  AiExtractionMapper.kt) — this repository's only job is "ask Gemini, hand back what it said". */
+ *  AiExtractionMapper.kt) — this repository's only job is "ask the AI, hand back what it said". */
 interface AiDocumentImportRepository {
     suspend fun extract(
         fileBytes: ByteArray,

@@ -31,7 +31,7 @@ import javax.inject.Singleton
  * [kotlinx.coroutines.flow.first] (a tool call is a one-shot question, not a subscription) and
  * returns a JSON string built with `org.json` (already part of the Android SDK — no reason to add
  * a second JSON library alongside Moshi just for these ad-hoc, per-tool-different result shapes).
- * Never throws for "no rows found": an empty JSON array is a normal, valid answer Gemini can
+ * Never throws for "no rows found": an empty JSON array is a normal, valid answer the model can
  * report as "لا توجد نتائج" — only [execute] itself throws, for a genuinely unknown tool name.
  */
 @Singleton

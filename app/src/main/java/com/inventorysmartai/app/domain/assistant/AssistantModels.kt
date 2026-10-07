@@ -35,7 +35,7 @@ sealed class AssistantStepResult {
 
 /** What's currently selected in the app, forwarded as free-text context on the next message —
  *  spec's "AI CHAT CONTEXT": current conversation, selected product/invoice/purchase request/
- *  report. Never includes secrets/tokens (spec: "do not expose secrets... to Gemini prompts"). */
+ *  report. Never includes secrets/tokens (spec: "do not expose secrets... to the model prompts"). */
 data class AssistantContext(
     val selectedProductId: Long? = null,
     val selectedProductName: String? = null,
@@ -43,9 +43,8 @@ data class AssistantContext(
     val selectedPurchaseRequestId: Long? = null,
     val selectedReportType: String? = null
 ) {
-    /** Rendered once per message rather than kept as structured fields on the wire — the backend
-     *  only ever needs to hand this to Gemini as plain conversational grounding, never to branch
-     *  logic on it (see backend AssistantOrchestrator.kt: `context` is treated as opaque text). */
+    /** Rendered once per message rather than kept as structured fields — the model only ever needs
+     *  this as plain conversational grounding, and nothing branches logic on it. */
     fun toPromptText(): String? {
         val parts = buildList {
             selectedProductId?.let { add("المنتج المحدد حاليًا: ${selectedProductName ?: "#$it"} (id=$it)") }

@@ -1,12 +1,15 @@
 package com.inventorysmartai.app.data.assistant
 
 /**
- * The LOCAL tools of the assistant (everything that reads or writes Room), as OpenAI-format function
- * definitions. Names and parameters are copied from the backend's gemini/ToolCatalog.kt so
- * [DefaultLocalToolExecutor] answers them unchanged. The four Google Workspace tools (Drive, Docs,
- * Calendar, Gmail) are deliberately absent: they need the backend's OAuth tokens, and this path has no backend.
+ * Every tool the assistant can call, as OpenAI-format function definitions: the LOCAL tools (everything that reads or writes
+ * Room — answered by [DefaultLocalToolExecutor]) plus the four Google Workspace tools (Drive, Docs, Calendar, Gmail), which
+ * [AssistantToolExecutor] forwards to the backend after the person confirmed them. The server holds the Google credentials;
+ * the model only ever sees the tool's name and a short JSON result.
  */
 internal object AssistantToolCatalog {
+
+    /** The tools that act on the person's Google account. All of them are WRITE/send actions and need a confirmation. */
+    val WORKSPACE_TOOL_NAMES: Set<String> = setOf("saveReportToDrive", "createGoogleDoc", "createCalendarEvent", "sendEmail")
 
     private fun int(desc: String) = mapOf("type" to "integer", "description" to desc)
     private fun num(desc: String) = mapOf("type" to "number", "description" to desc)
@@ -96,14 +99,32 @@ internal object AssistantToolCatalog {
                 "branchId" to int("Optional: scope the report to one branch"),
                 "fromDate" to num("Optional start date, epoch millis"),
                 "toDate" to num("Optional end date, epoch millis")
-            ), listOf("reportType")))
+            ), listOf("reportType"))),
+        tool("saveReportToDrive", "Save a report as a Markdown file in the user's Google Drive (folder \"Reports\"). WRITE action — the app shows an Arabic confirmation dialog before executing it. Write the report text yourself (using data from createReport / the other tools) and pass it as reportMarkdown.",
+            obj(mapOf("title" to str("File title, without an extension"), "reportMarkdown" to str("The complete report text, in Markdown")), listOf("title", "reportMarkdown"))),
+        tool("createGoogleDoc", "Create a Google Docs document containing a report. WRITE action — confirmation dialog first. Write the report text yourself and pass it as reportMarkdown.",
+            obj(mapOf("title" to str("Document title"), "reportMarkdown" to str("The complete report text, in Markdown")), listOf("title", "reportMarkdown"))),
+        tool("createCalendarEvent", "Add an event to the user's Google Calendar. WRITE action — confirmation dialog first. Times are ISO-8601 with a UTC offset, e.g. 2026-10-12T09:00:00+03:00.",
+            obj(mapOf(
+                "title" to str("Event title"),
+                "startIso" to str("Start time, ISO-8601 with UTC offset"),
+                "endIso" to str("End time, ISO-8601 with UTC offset"),
+                "description" to str("Optional description")
+            ), listOf("title", "startIso", "endIso"))),
+        tool("sendEmail", "Send an email from the user's Gmail account. WRITE action — confirmation dialog first. Only send to an address the user gave you.",
+            obj(mapOf(
+                "to" to str("Recipient email address"),
+                "subject" to str("Subject line (single line)"),
+                "body" to str("Plain-text message body"),
+                "attachmentDriveFileId" to str("Optional: the Drive file id returned by saveReportToDrive, to link in the email")
+            ), listOf("to", "subject", "body")))
     )
 
     val systemPrompt: String = """
         أنت "المساعد الذكي" داخل تطبيق Inventory Smart AI لإدارة المخزون. أجب دائمًا بالعربية الفصحى المبسّطة وبإيجاز.
         استخدم الأدوات المتاحة (tools) للحصول على أي بيانات فعلية عن المنتجات أو المخزون أو المبيعات أو طلبات الشراء أو الأهداف أو الفروع — لا تخترع أرقامًا أو أسماء أصناف أو نتائج من عندك أبدًا. إن لم تتوفر أداة مناسبة لسؤال المستخدم، وضّح ذلك بصراحة بدلاً من الافتراض.
         إذا طلب المستخدم إنشاء طلب شراء، استدعِ الأداة المناسبة مباشرة — سيتولى التطبيق عرض تأكيد صريح على المستخدم قبل أي تنفيذ فعلي، فلا داعي لأن تطلب أنت التأكيد نصيًا.
-        حفظ التقارير في Drive وإرسال البريد وإضافة مواعيد التقويم غير متاحة في هذا الوضع؛ إن طُلبت فاعتذر بلطف واعرض بدلاً منها إعداد التقرير أو ملخصًا نصيًا.
+        لحفظ تقرير في Drive أو إنشاء مستند Google Docs أو إضافة موعد إلى التقويم أو إرسال بريد عبر Gmail: أعدّ نص التقرير بنفسك من بيانات الأدوات (createReport وغيرها) ثم استدعِ الأداة المناسبة (saveReportToDrive / createGoogleDoc / createCalendarEvent / sendEmail) مباشرة — سيعرض التطبيق تأكيدًا صريحًا على المستخدم قبل التنفيذ. لا ترسل بريدًا إلا إلى عنوان ذكره المستخدم. إن أعادت الأداة خطأ google_not_linked فاطلب منه ربط حساب Google من الإعدادات ← خدمات Google ثم أعد المحاولة، وإن أعادت أي خطأ آخر فاشرح له السبب باختصار ولا تدّعِ نجاح العملية.
         عند تقديم تحليل أو توصية (مخزون منخفض، توصية شراء، تقدم هدف)، اذكر بوضوح أنها توصية أو تحليل من الذكاء الاصطناعي وليست حقيقة نهائية مؤكدة.
     """.trimIndent()
 }

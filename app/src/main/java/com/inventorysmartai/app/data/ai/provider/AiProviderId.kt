@@ -1,7 +1,7 @@
 package com.inventorysmartai.app.data.ai.provider
 
 /**
- * The three OpenAI-compatible providers the app can call directly (no backend, no Firebase).
+ * The three OpenAI-compatible providers the app can call directly (no backend in between; the keys live on the device).
  *
  * Model ids move fast on every provider (Groq in particular rotates preview models), so these are only
  * DEFAULTS: each one can be overridden from Settings → إعدادات الذكاء الاصطناعي without an app release.

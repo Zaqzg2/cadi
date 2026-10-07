@@ -10,7 +10,7 @@ import java.io.InterruptedIOException
 
 /**
  * The one place a failure of the direct-provider path becomes a user-facing Arabic [BackendFailure] —
- * the same type the Firebase and backend paths already return, so no screen above changes.
+ * the same type the backend path returns, so no screen above changes.
  */
 internal fun Throwable.toProviderFailure(): BackendFailure {
     if (this is BackendFailure) return this

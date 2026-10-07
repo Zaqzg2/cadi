@@ -39,7 +39,7 @@ import com.inventorysmartai.app.domain.repository.GoogleServiceStatus
 private data class ServiceRow(val label: String, val value: (GoogleServiceStatus) -> String)
 
 private val SERVICE_ROWS = listOf(
-    ServiceRow("Gemini") { it.gemini },
+    ServiceRow("الذكاء الاصطناعي (الخادم)") { it.ai },
     ServiceRow("Google Drive") { it.drive },
     ServiceRow("Google Sheets") { it.sheets },
     ServiceRow("Google Docs") { it.docs },
@@ -50,6 +50,7 @@ private val SERVICE_ROWS = listOf(
 @Composable
 fun GoogleServicesStatusScreen(navController: NavController, viewModel: GoogleServicesStatusViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsState()
+    val googleAvailable = state.status?.googleConfigured != false
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -89,10 +90,42 @@ fun GoogleServicesStatusScreen(navController: NavController, viewModel: GoogleSe
                     } else {
                         Button(
                             onClick = { viewModel.connect(context as ComponentActivity) },
+                            enabled = googleAvailable,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("ربط حساب Google")
                         }
+                        if (!googleAvailable) {
+                            Text(
+                                "خدمات Google غير مفعّلة على الخادم (لم تُضبط بيانات OAuth هناك). الذكاء الاصطناعي لا يتأثر.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 12.dp))
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("الذكاء الاصطناعي", style = MaterialTheme.typography.titleMedium)
+                    val providers = state.status?.aiProviders.orEmpty()
+                    Text(
+                        if (providers.isEmpty()) "لا يوجد مزوّد جاهز حاليًا على الخادم."
+                        else "المزوّدون الجاهزون على الخادم: ${providers.joinToString("، ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                    )
+                    OutlinedButton(
+                        onClick = { viewModel.refresh(verifyAi = true) },
+                        enabled = !state.isLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("اختبار الاتصال بالذكاء الاصطناعي")
                     }
                 }
             }

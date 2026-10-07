@@ -202,7 +202,7 @@ interface ImportRepository {
         sourceAttachmentId: Long? = null
     ): Long
 
-    /** Phase 4: records document-level fields Gemini extracted (an invoice's number/date/
+    /** Phase 4: records document-level fields the model extracted (an invoice's number/date/
      *  customer/..., a purchase request's requester/date) — see [ImportJob.metadataJson]'s doc
      *  comment for exactly what this carries and why it is separate from the per-row fields. A
      *  new method rather than another [persistAnalysis] parameter since it is set at a different

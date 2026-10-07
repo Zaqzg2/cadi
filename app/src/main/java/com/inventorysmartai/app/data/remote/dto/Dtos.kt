@@ -2,44 +2,16 @@ package com.inventorysmartai.app.data.remote.dto
 
 import com.squareup.moshi.JsonClass
 
-// ---------- Assistant ----------
-
-@JsonClass(generateAdapter = true)
-data class SendMessageRequest(val sessionId: String, val conversationId: String, val message: String, val context: String? = null)
-
-@JsonClass(generateAdapter = true)
-data class ToolResultDto(val callId: String, val name: String, val resultText: String)
-
-@JsonClass(generateAdapter = true)
-data class ContinueRequest(val conversationId: String, val results: List<ToolResultDto>)
-
-@JsonClass(generateAdapter = true)
-data class ExecuteBackendToolRequest(
-    val conversationId: String,
-    val sessionId: String,
-    val callId: String,
-    val name: String,
-    val arguments: Map<String, Any?>,
-    val approved: Boolean
-)
-
-@JsonClass(generateAdapter = true)
-data class PendingToolCallDto(val callId: String, val name: String, val arguments: Map<String, Any?> = emptyMap(), val site: String, val risk: String)
-
-@JsonClass(generateAdapter = true)
-data class AssistantTurnResponseDto(
-    val type: String,
-    val conversationId: String,
-    val text: String? = null,
-    val calls: List<PendingToolCallDto>? = null
-)
-
 // ---------- Documents ----------
 
 @JsonClass(generateAdapter = true)
 data class DocumentExtractionResponseDto(
     val documentType: String,
-    val result: com.inventorysmartai.app.domain.importing.ai.AiExtractionDocument
+    val result: com.inventorysmartai.app.domain.importing.ai.AiExtractionDocument,
+    /** Which provider/model produced it (informational). */
+    val provider: String? = null,
+    val model: String? = null,
+    val usedOcr: Boolean = false
 )
 
 // ---------- Google auth ----------
@@ -47,8 +19,9 @@ data class DocumentExtractionResponseDto(
 @JsonClass(generateAdapter = true)
 data class LinkGoogleAccountRequest(val sessionId: String, val serverAuthCode: String)
 
+/** [linkToken] is present only in the answer to /link: the sealed token the app keeps (see data/backend/BackendCredentials.kt). */
 @JsonClass(generateAdapter = true)
-data class GoogleAuthStatusDto(val linked: Boolean, val grantedScopes: List<String> = emptyList())
+data class GoogleAuthStatusDto(val linked: Boolean, val grantedScopes: List<String> = emptyList(), val linkToken: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class UnlinkGoogleAccountRequest(val sessionId: String)
@@ -83,7 +56,11 @@ data class SpreadsheetIdDto(val spreadsheetId: String, val status: String? = nul
 
 @JsonClass(generateAdapter = true)
 data class ServiceStatusDto(
-    val gemini: String,
+    val ai: String,
+    /** Labels of the AI providers ready on the server right now (e.g. ["Mistral", "Groq"]). */
+    val aiProviders: List<String> = emptyList(),
+    /** false when the server has no Google OAuth client at all. */
+    val googleConfigured: Boolean = true,
     val drive: String,
     val sheets: String,
     val docs: String,

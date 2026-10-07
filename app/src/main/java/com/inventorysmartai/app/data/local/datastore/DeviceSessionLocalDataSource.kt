@@ -10,10 +10,10 @@ import javax.inject.Inject
 
 /**
  * Phase 4: a random, opaque id — never a device identifier, email, or anything else personally
- * identifying — generated once on first use and persisted thereafter. Sent with every backend
- * call as `sessionId`; the backend uses it purely as a key into its own token/conversation stores
- * (see backend/auth/TokenStore.kt) and never learns anything about the device beyond "some app
- * instance with this random id".
+ * identifying — generated once on first use and persisted thereafter. Sent with backend calls as
+ * `sessionId`; the backend uses it only for its audit log and as the context that binds the sealed Google link
+ * token to this app instance (see backend/security/TokenSealer.kt), and never learns anything about the device
+ * beyond "some app instance with this random id".
  */
 class DeviceSessionLocalDataSource @Inject constructor(
     private val dataStore: DataStore<Preferences>

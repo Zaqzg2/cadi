@@ -1,10 +1,9 @@
 .git
 .github
 .gradle
-.idea
-*.iml
+**/build
+app
+docs
+*.md
 local.properties
-build
-app/build
-backend/build
-*.hprof
+**/.env

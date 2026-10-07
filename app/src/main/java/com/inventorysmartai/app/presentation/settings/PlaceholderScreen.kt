@@ -18,10 +18,10 @@ private data class PlaceholderInfo(val title: String, val message: String)
 
 private val placeholders = mapOf(
     "backup" to PlaceholderInfo("النسخ الاحتياطي", "سيتيح لك هذا القسم أخذ نسخ احتياطية من بياناتك ومزامنتها مع Google Drive."),
-    "sync" to PlaceholderInfo("المزامنة", "ستتم مزامنة بياناتك بين الأجهزة عبر Firebase / خادم آمن في مرحلة لاحقة."),
+    "sync" to PlaceholderInfo("المزامنة", "ستتم مزامنة بياناتك بين الأجهزة عبر الخادم الآمن في مرحلة لاحقة."),
     "account" to PlaceholderInfo("الحساب", "إدارة حساب المستخدم وتسجيل الدخول ستضاف مع تفعيل الخدمات السحابية."),
     "permissions" to PlaceholderInfo("الصلاحيات", "إدارة صلاحيات المستخدمين والأدوار ستتوفر في مرحلة لاحقة."),
-    "ai_settings" to PlaceholderInfo("إعدادات الذكاء الاصطناعي", "إعدادات المساعد الذكي وربطه بـ Gemini API ستضاف عند تفعيل هذه الميزة.")
+    "ai_settings" to PlaceholderInfo("إعدادات الذكاء الاصطناعي", "يمكن ضبط مسار الذكاء الاصطناعي ومفاتيحك الخاصة من «إعدادات الذكاء الاصطناعي».")
 )
 
 @Composable

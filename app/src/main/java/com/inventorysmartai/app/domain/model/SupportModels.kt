@@ -55,7 +55,7 @@ data class ImportJob(
      *  TRACEABILITY: "the user should be able to open the original source document from the
      *  review screen"). Null for a plain CSV/Excel import, which has no separate attachment. */
     val sourceAttachmentId: Long? = null,
-    /** Document-level fields Gemini extracted that apply to the whole document rather than one
+    /** Document-level fields the model extracted that apply to the whole document rather than one
      *  row — an invoice's number/date/customer/branch/warehouse/currency/previousBalance/
      *  invoiceTotal/finalBalance, or a purchase request's requester/date. Raw JSON object of
      *  field name -> extracted value; never run through [ImportField]/Normalizer (these aren't

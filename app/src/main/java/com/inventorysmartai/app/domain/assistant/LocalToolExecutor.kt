@@ -10,7 +10,7 @@ package com.inventorysmartai.app.domain.assistant
  */
 interface LocalToolExecutor {
     /**
-     * [argumentsJson] is the tool's raw JSON arguments object exactly as Gemini produced it (see
+     * [argumentsJson] is the tool's raw JSON arguments object exactly as the model produced it (see
      * backend gemini/ToolCatalog.kt for each tool's parameter schema). Returns a JSON-encoded
      * result string — never throws for "no rows found" (an empty JSON array/object is a normal,
      * valid answer); only for a genuinely unknown tool name, which the caller turns into an

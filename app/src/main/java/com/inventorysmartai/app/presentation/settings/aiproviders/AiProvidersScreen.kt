@@ -57,14 +57,43 @@ fun AiProvidersScreen(navController: NavController, viewModel: AiProvidersViewMo
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("مزوّدو الذكاء الاصطناعي المجانيون", style = MaterialTheme.typography.titleMedium)
+                        Text("مسار الذكاء الاصطناعي", style = MaterialTheme.typography.titleMedium)
+                        val usingOwnKeys = state.snapshot.preferDirect && state.snapshot.providers.any { it.hasKey && it.enabled }
+                        Text(
+                            if (usingOwnKeys) "المسار الحالي: مفاتيحك الخاصة مباشرةً (بدون الخادم)."
+                            else "المسار الحالي: الخادم الخاص بالتطبيق (الافتراضي) — لا يحتاج أي مفتاح منك.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text("استخدام مفاتيحي مباشرة بدلًا من الخادم", style = MaterialTheme.typography.bodyMedium)
+                                Text(
+                                    "يعمل بعد إدخال مفتاح واحد على الأقل أدناه. وإن تعطّل الخادم وكانت لديك مفاتيح محفوظة، تُستخدم تلقائيًا كاحتياط.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                            Switch(checked = state.snapshot.preferDirect, onCheckedChange = viewModel::setPreferDirect)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("مفاتيحي الخاصة (اختياري)", style = MaterialTheme.typography.titleMedium)
                         Text(
                             "أدخل مفتاح API الخاص بك لأي مزوّد. يُحفظ المفتاح مشفّرًا على هذا الجهاز فقط ولا يخرج منه إلا إلى المزوّد نفسه. " +
                                 "عند فشل أحد المزوّدين (حدّ الاستخدام أو انقطاع) ينتقل التطبيق تلقائيًا إلى التالي حسب الترتيب أدناه.",
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
-                            "تنبيه خصوصية: صور الفواتير ونصوصها تُرسل إلى المزوّد المختار. بعض الطبقات المجانية قد تسجّل الطلبات أو تستخدمها " +
+                            "تنبيه خصوصية: في هذا الوضع تُرسل صور الفواتير ونصوصها إلى المزوّد المختار مباشرةً من هاتفك. بعض الطبقات المجانية قد تسجّل الطلبات أو تستخدمها " +
                                 "لتحسين النماذج، فلا ترسل بيانات عملاء حساسة عبر مزوّد لم تراجع شروطه.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error

@@ -3,61 +3,30 @@ package com.inventorysmartai.backend.routes.dto
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
-// ---------- Assistant ----------
-
-@Serializable
-data class SendMessageRequest(
-    val sessionId: String,
-    val conversationId: String,
-    val message: String,
-    /** Free-text summary of whatever's selected in the app right now (a product, an invoice, a
-     *  purchase request, a report) — Phase 4 spec's "AI CHAT CONTEXT". The app builds this text;
-     *  the backend treats it as opaque context, never as instructions to follow on their own. */
-    val context: String? = null
-)
-
-@Serializable
-data class ToolResultDto(val callId: String, val name: String, val resultText: String)
-
-@Serializable
-data class ContinueRequest(val conversationId: String, val results: List<ToolResultDto>)
-
-@Serializable
-data class ExecuteBackendToolRequest(
-    val conversationId: String,
-    val sessionId: String,
-    val callId: String,
-    val name: String,
-    val arguments: JsonObject,
-    val approved: Boolean
-)
-
-@Serializable
-data class PendingToolCallDto(val callId: String, val name: String, val arguments: JsonObject, val site: String, val risk: String)
-
-@Serializable
-data class AssistantTurnResponseDto(
-    val type: String, // "final" | "toolCalls"
-    val conversationId: String,
-    val text: String? = null,
-    val calls: List<PendingToolCallDto>? = null
-)
-
 // ---------- Documents / extraction ----------
 
 @Serializable
 data class DocumentExtractionResponseDto(
     val documentType: String,
-    val result: JsonObject
+    /** The extraction document (header?, rows, documentWarnings) — the shape the app's AiExtractionDocument reads. */
+    val result: JsonObject,
+    /** Which provider/model produced it, and whether OCR read the text first — informational only. */
+    val provider: String? = null,
+    val model: String? = null,
+    val usedOcr: Boolean = false
 )
 
 // ---------- Google auth ----------
 
 @Serializable
-data class LinkGoogleAccountRequest(val sessionId: String, val serverAuthCode: String)
+data class SessionRequest(val sessionId: String)
 
 @Serializable
-data class GoogleAuthStatusDto(val linked: Boolean, val grantedScopes: List<String> = emptyList())
+data class LinkGoogleAccountRequest(val sessionId: String, val serverAuthCode: String)
+
+/** [linkToken] is present ONLY in the answer to /link: the sealed token the phone must keep (see security/TokenSealer.kt). */
+@Serializable
+data class GoogleAuthStatusDto(val linked: Boolean, val grantedScopes: List<String> = emptyList(), val linkToken: String? = null)
 
 @Serializable
 data class UnlinkGoogleAccountRequest(val sessionId: String)
@@ -83,7 +52,11 @@ data class CalendarEventRequestDto(val sessionId: String, val title: String, val
 
 @Serializable
 data class ServiceStatusDto(
-    val gemini: String, // "متصل" | "غير متصل" | "خطأ"
+    val ai: String, // "متصل" | "خطأ"
+    /** Labels of the AI providers that are ready right now (e.g. ["Mistral", "Groq"]). */
+    val aiProviders: List<String> = emptyList(),
+    /** false when the server has no Google OAuth client — the Google rows below then read "غير متصل" for everyone. */
+    val googleConfigured: Boolean = true,
     val drive: String,
     val sheets: String,
     val docs: String,

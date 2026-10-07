@@ -1,12 +1,9 @@
 package com.inventorysmartai.app.data.ai
 
 /**
- * A tiny, SDK-independent description of the JSON shape Gemini is asked to return.
- *
- * Why not build Firebase's `Schema` objects directly? Everything here is plain Kotlin, so the shape
- * rules (what is required, what may be null) are unit-tested on the plain JVM. Only
- * [toFirebaseSchema] (FirebaseSchemaConverter.kt) touches the Firebase SDK, and it is a one-line
- * mapping per node type.
+ * A tiny, SDK-independent description of the JSON shape the AI model is asked to return (used by the direct-provider
+ * mode, which embeds it in the prompt as a JSON Schema — see provider/JsonSchemaConverter.kt). Everything here is plain
+ * Kotlin, so the shape rules (what is required, what may be null) are unit-tested on the plain JVM.
  */
 sealed interface AiSchemaNode {
     val description: String?
@@ -15,8 +12,8 @@ sealed interface AiSchemaNode {
 /**
  * [required] names the properties that must be present. Note the direction of the default: JSON
  * Schema (and the backend schemas this was ported from) treats a property as OPTIONAL unless listed
- * as required, while Firebase AI Logic's `Schema.obj` treats every property as REQUIRED unless listed
- * in `optionalProperties` — so the conversion goes through [optionalProperties], never `required`.
+ * as required; this tree stores the OPTIONAL names ([optionalProperties]) instead, and the conversion to JSON Schema
+ * derives `required` from them.
  */
 data class AiObject(
     val properties: Map<String, AiSchemaNode>,

@@ -248,7 +248,7 @@ class ImportFlowViewModel @Inject constructor(
                         // check for a matching saved template. A re-analysis after the user
                         // edited the mapping (confirmColumnMappingAndReanalyze) keeps their edits.
                         // For an AI-sourced job this "mapping" is the synthetic identity mapping
-                        // ImportPipeline.analyzeRows built (one entry per field Gemini actually
+                        // ImportPipeline.analyzeRows built (one entry per field the model actually
                         // returned) — harmless to show on the mapping screen as-is, though a
                         // dedicated "this was AI-extracted, here's what was found" presentation
                         // would read better; left as a follow-up (see README's Known limitations).

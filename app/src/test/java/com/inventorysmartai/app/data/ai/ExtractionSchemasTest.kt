@@ -9,9 +9,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * These schemas decide the shape of everything Gemini returns, and AiExtractionMapper silently drops any
+ * These schemas decide the shape of everything the model returns, and AiExtractionMapper silently drops any
  * field name it does not recognise — so drift between the two must fail here, not in front of a user.
- * Pure Kotlin: no Firebase, no Android.
+ * Pure Kotlin: no Android.
  */
 class ExtractionSchemasTest {
 

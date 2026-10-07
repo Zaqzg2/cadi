@@ -1,9 +1,5 @@
 package com.inventorysmartai.app.presentation.datacenter.importflow
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,22 +11,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
-import com.inventorysmartai.app.data.ai.AppCheckDiagnostics
 import com.inventorysmartai.app.navigation.Destination
 
 /** Spec section 24 step 4 ("تحليل الملف") plus 23's "show progress, rows processed, current
@@ -67,7 +59,7 @@ fun ImportAnalyzingScreen(navController: NavController, viewModel: ImportFlowVie
             if (state.analysisError != null) {
                 Text("تعذّر تحليل الملف", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.padding(4.dp))
-                // Selectable: long-press to copy (e.g. the App Check debug token shown in debug builds).
+                // Selectable: long-press to copy the message (useful when reporting a server error).
                 SelectionContainer {
                     Text(
                         state.analysisError.orEmpty(),
@@ -75,24 +67,6 @@ fun ImportAnalyzingScreen(navController: NavController, viewModel: ImportFlowVie
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center
                     )
-                }
-                // A debug build's App Check error carries the debug token; one tap copies it (long-press
-                // selection inside centered text is fiddly on a phone).
-                val debugToken = remember(state.analysisError) {
-                    AppCheckDiagnostics.findFirstUuid(state.analysisError.orEmpty())
-                }
-                if (debugToken != null) {
-                    val context = LocalContext.current
-                    Spacer(Modifier.padding(4.dp))
-                    OutlinedButton(
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("App Check debug token", debugToken))
-                            Toast.makeText(context, "تم نسخ الرمز", Toast.LENGTH_SHORT).show()
-                        }
-                    ) {
-                        Text("نسخ الرمز")
-                    }
                 }
                 Spacer(Modifier.padding(8.dp))
                 Button(onClick = { navController.popBackStack(Destination.ImportSetup.route, inclusive = false) }) {

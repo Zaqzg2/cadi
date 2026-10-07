@@ -51,7 +51,7 @@ enum class ImportErrorCode {
     INVALID_HEADER,
     DATABASE_ERROR,
     // --- Phase 4 ---
-    /** The backend/Gemini call itself failed (timeout, quota, network, invalid/unparseable
+    /** The backend or the AI call itself failed (timeout, quota, network, invalid/unparseable
      *  output) — distinct from every code above, which describes a business-rule problem with a
      *  row the model DID successfully return. */
     AI_EXTRACTION_FAILED,

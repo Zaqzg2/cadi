@@ -30,7 +30,7 @@ data class AiAssistantUiState(
  * "المساعد الذكي" — Phase 4 spec's AI ASSISTANT section. Owns exactly one conversation for the
  * lifetime of this ViewModel (a fresh `conversationId` per screen visit is the simplest correct
  * choice: nothing in the spec asks for chat history to survive navigating away, and starting
- * clean avoids ever resuming a stale/confused Gemini thread). All the actual tool-calling-loop
+ * clean avoids ever resuming a stale or confused model thread). All the actual tool-calling-loop
  * logic — which calls run silently, which stop for confirmation — lives in
  * [AssistantRepository]; this ViewModel only turns its results into chat bubbles and dialog state.
  */
