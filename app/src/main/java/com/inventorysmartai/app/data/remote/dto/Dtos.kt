@@ -14,6 +14,15 @@ data class DocumentExtractionResponseDto(
     val usedOcr: Boolean = false
 )
 
+/** What /v1/documents/read returns: the text of a photo or PDF, tables as Markdown tables. */
+@JsonClass(generateAdapter = true)
+data class DocumentReadResponseDto(
+    val text: String,
+    val pages: Int = 0,
+    val provider: String? = null,
+    val usedOcr: Boolean = false
+)
+
 // ---------- Google auth ----------
 
 @JsonClass(generateAdapter = true)

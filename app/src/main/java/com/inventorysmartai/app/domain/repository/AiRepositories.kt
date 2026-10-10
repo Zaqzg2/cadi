@@ -2,6 +2,7 @@ package com.inventorysmartai.app.domain.repository
 
 import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
+import com.inventorysmartai.app.domain.assistant.AttachmentInfo
 import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocument
 import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocumentType
 import kotlinx.coroutines.flow.Flow
@@ -12,7 +13,21 @@ import kotlinx.coroutines.flow.Flow
  *  need confirmation, how results are fed back) is resolved internally; a ViewModel only ever sees
  *  [AssistantStepResult.Final], [AssistantStepResult.ConfirmationRequired] or [AssistantStepResult.Error]. */
 interface AssistantRepository {
-    suspend fun sendMessage(conversationId: String, message: String, context: AssistantContext?): AssistantStepResult
+    /** [attachmentIds] are files already registered for this conversation with [attachFile]; the model is told they exist
+     *  and reads them through the file tools. */
+    suspend fun sendMessage(
+        conversationId: String,
+        message: String,
+        context: AssistantContext?,
+        attachmentIds: List<String> = emptyList()
+    ): AssistantStepResult
+
+    /** Reads a file the person picked ([reference] is its content:// URI) and registers it for this conversation. Fails with an
+     *  Arabic message for a file that is too big, empty, corrupt or of a kind the assistant cannot read. */
+    suspend fun attachFile(conversationId: String, reference: String): Result<AttachmentInfo>
+
+    /** Forgets a file the person removed before sending. */
+    fun detachFile(conversationId: String, attachmentId: String)
 
     /** Resumes the same conversation after the user answered the confirmation dialog for the
      *  most recent [AssistantStepResult.ConfirmationRequired]. */

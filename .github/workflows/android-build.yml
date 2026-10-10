@@ -44,23 +44,28 @@ jobs:
       - name: Regenerate Gradle Wrapper
         run: gradle wrapper --gradle-version 8.14.4 --distribution-type bin
 
-      # Phase 3 spec section 27: "./gradlew test" before "./gradlew assembleDebug". Runs first so
-      # a broken pipeline test fails fast without waiting for a full APK assembly. Since Phase 4
-      # added the :backend module to settings.gradle.kts, this same bare "./gradlew test" (no
-      # module qualifier) now also runs :backend's JUnit tests — nothing else needed for that part.
-      - name: Run unit tests
-        id: unit_tests
-        run: |
-          set -o pipefail
-          ./gradlew test --stacktrace 2>&1 | tee unit-test-output.log
-        continue-on-error: true
-
+      # The APK is built FIRST and on its own, so a red unit test can never stop you from installing and trying the app:
+      # the run still ends red (see "Fail job" below) and the APK is still uploaded. (Earlier versions ran every test before
+      # assembling, which meant one failing test - in either module - produced no APK at all.)
       - name: Build debug APK
         id: build
-        if: steps.unit_tests.outcome == 'success'
         run: |
           set -o pipefail
           ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build-output.log
+        continue-on-error: true
+
+      - name: Run app unit tests
+        id: app_tests
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee unit-test-output.log
+        continue-on-error: true
+
+      - name: Run backend unit tests
+        id: backend_tests
+        run: |
+          set -o pipefail
+          ./gradlew :backend:test --stacktrace 2>&1 | tee backend-test-output.log
         continue-on-error: true
 
       # Builds the backend's full Ktor application distribution (a plain JVM app, not an Android artifact) - confirms it
@@ -68,17 +73,15 @@ jobs:
       # environment only when the server starts, never at build time - see backend/README.md.
       - name: Build backend
         id: build_backend
-        if: steps.unit_tests.outcome == 'success'
         run: |
           set -o pipefail
-          ./gradlew :backend:build --stacktrace 2>&1 | tee backend-build-output.log
+          ./gradlew :backend:installDist -x test --stacktrace 2>&1 | tee backend-build-output.log
         continue-on-error: true
 
       # Deployment check: the same Dockerfile the hosting platforms use. Informational only (it never blocks the APK) - a
       # failure here means "fix this before deploying", and shows up as a warning on the run.
       - name: Build backend Docker image (deployment check)
         id: docker_build
-        if: steps.unit_tests.outcome == 'success'
         run: |
           set -o pipefail
           docker build -t inventory-smart-ai-backend . 2>&1 | tee docker-build-output.log
@@ -89,11 +92,12 @@ jobs:
         run: echo "::warning::The backend Docker image failed to build - see the 'Build backend Docker image' step before deploying."
 
       - name: Collect failure logs
-        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure' || steps.build_backend.outcome == 'failure'
+        if: steps.build.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure' || steps.docker_build.outcome == 'failure'
         run: |
           mkdir -p ci-failure-logs
-          cp unit-test-output.log ci-failure-logs/ 2>/dev/null || true
           cp build-output.log ci-failure-logs/ 2>/dev/null || true
+          cp unit-test-output.log ci-failure-logs/ 2>/dev/null || true
+          cp backend-test-output.log ci-failure-logs/ 2>/dev/null || true
           cp backend-build-output.log ci-failure-logs/ 2>/dev/null || true
           cp docker-build-output.log ci-failure-logs/ 2>/dev/null || true
           [ -d app/build/reports ] && cp -r app/build/reports ci-failure-logs/app-build-reports
@@ -101,21 +105,23 @@ jobs:
           exit 0
 
       - name: Upload failure logs
-        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure' || steps.build_backend.outcome == 'failure'
+        if: steps.build.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure' || steps.docker_build.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ci-failure-logs
           path: ci-failure-logs/
           if-no-files-found: warn
 
-      - name: Fail job if tests or build failed
-        if: steps.unit_tests.outcome == 'failure' || steps.build.outcome == 'failure' || steps.build_backend.outcome == 'failure'
-        run: exit 1
-
+      # Upload the APK whenever it was built, even if something else in this run is red.
       - name: Upload APK
-        if: steps.build.outcome == 'success'
+        if: ${{ always() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: inventory-smart-ai-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # The Docker image is a deployment check only; everything else turns the run red when it fails.
+      - name: Fail job if the APK, a test, or the backend build failed
+        if: ${{ always() && (steps.build.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure') }}
+        run: exit 1

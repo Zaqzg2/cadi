@@ -92,4 +92,30 @@ class AssistantToolsTest {
         assertEquals("", WorkspaceToolSupport.text(emptyMap(), "k"))
         assertEquals("", WorkspaceToolSupport.text(mapOf("k" to 5.0), "k"))
     }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun namesOf(tools: List<Map<String, Any?>>): Set<String> =
+        tools.map { ((it["function"] as Map<String, Any?>)["name"]) as String }.toSet()
+
+    @Test
+    fun `the file tools are offered, and the attachment ones only once something is attached`() {
+        val withFiles = namesOf(AssistantToolCatalog.toolsFor(hasAttachments = true))
+        val withoutFiles = namesOf(AssistantToolCatalog.toolsFor(hasAttachments = false))
+        assertTrue(withFiles.containsAll(AssistantToolCatalog.FILE_TOOL_NAMES))
+        assertTrue(withoutFiles.containsAll(setOf("calculate", "calculateTieredCommission", "createSpreadsheet", "buildDashboard")))
+        assertTrue(withoutFiles.none { it in AssistantToolCatalog.ATTACHMENT_TOOL_NAMES })
+        assertTrue("the data tools stay available either way", "getProducts" in withoutFiles)
+    }
+
+    @Test
+    fun `file tools are neither workspace tools nor local write tools`() {
+        assertTrue(AssistantToolCatalog.FILE_TOOL_NAMES.intersect(AssistantToolCatalog.WORKSPACE_TOOL_NAMES).isEmpty())
+        assertFalse("createPurchaseRequest" in AssistantToolCatalog.FILE_TOOL_NAMES)
+    }
+
+    @Test
+    fun `the system prompt tells the model how to use files`() {
+        listOf("readAttachment", "queryTable", "calculate", "calculateTieredCommission", "fillForm", "createSpreadsheet", "buildDashboard")
+            .forEach { assertTrue("$it should be explained", AssistantToolCatalog.systemPrompt.contains(it)) }
+    }
 }

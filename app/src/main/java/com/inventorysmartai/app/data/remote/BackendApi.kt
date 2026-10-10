@@ -4,6 +4,7 @@ import com.inventorysmartai.app.data.remote.dto.CalendarEventRequestDto
 import com.inventorysmartai.app.data.remote.dto.CalendarEventResultDto
 import com.inventorysmartai.app.data.remote.dto.DocCreateRequestDto
 import com.inventorysmartai.app.data.remote.dto.DocumentExtractionResponseDto
+import com.inventorysmartai.app.data.remote.dto.DocumentReadResponseDto
 import com.inventorysmartai.app.data.remote.dto.DriveUploadResultDto
 import com.inventorysmartai.app.data.remote.dto.GoogleAuthStatusDto
 import com.inventorysmartai.app.data.remote.dto.LinkGoogleAccountRequest
@@ -39,6 +40,14 @@ interface BackendApi {
         @Part("documentType") documentType: RequestBody,
         @Part("sessionId") sessionId: RequestBody
     ): DocumentExtractionResponseDto
+
+    /** Same upload as [extractDocument] without a document type: the document's text (tables as Markdown), for the assistant's file attachments. */
+    @Multipart
+    @POST("v1/documents/read")
+    suspend fun readDocument(
+        @Part files: List<MultipartBody.Part>,
+        @Part("sessionId") sessionId: RequestBody
+    ): DocumentReadResponseDto
 
     @POST("v1/auth/google/link")
     suspend fun linkGoogleAccount(@Body request: LinkGoogleAccountRequest): GoogleAuthStatusDto

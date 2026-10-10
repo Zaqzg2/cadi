@@ -23,6 +23,10 @@ suspend fun <T> safeApiCall(moshi: Moshi, block: suspend () -> T): Result<T> = t
     Result.success(block())
 } catch (e: CancellationException) {
     throw e // a cancelled coroutine must stay cancelled — never turn it into a "failure" the UI would show
+} catch (e: BackendFailure) {
+    // A block that already decided on a specific, user-facing failure (e.g. "the server returned no link token") must
+    // reach the screen as that failure, not be re-wrapped as "unexpected error".
+    Result.failure(e)
 } catch (e: InterruptedIOException) {
     // A timeout (SocketTimeoutException is an InterruptedIOException): the connection exists but nothing came back in time.
     // On free hosting this is usually "the server is waking up", which deserves its own message, not "no internet".

@@ -1,6 +1,7 @@
 package com.inventorysmartai.app.data.assistant
 
 import com.inventorysmartai.app.data.ai.provider.AiJson
+import com.inventorysmartai.app.data.assistant.files.FileToolExecutor
 import com.inventorysmartai.app.data.remote.BackendFailure
 import com.inventorysmartai.app.domain.assistant.LocalToolExecutor
 import com.inventorysmartai.app.domain.repository.GoogleWorkspaceRepository
@@ -19,7 +20,8 @@ import javax.inject.Singleton
 @Singleton
 class AssistantToolExecutor @Inject constructor(
     private val local: DefaultLocalToolExecutor,
-    private val workspace: GoogleWorkspaceRepository
+    private val workspace: GoogleWorkspaceRepository,
+    private val files: FileToolExecutor
 ) : LocalToolExecutor {
 
     override fun requiresConfirmation(name: String): Boolean =
@@ -33,6 +35,7 @@ class AssistantToolExecutor @Inject constructor(
         }
 
     override suspend fun execute(name: String, argumentsJson: String): String {
+        if (name in AssistantToolCatalog.FILE_TOOL_NAMES) return files.execute(name, argumentsJson)
         if (name !in AssistantToolCatalog.WORKSPACE_TOOL_NAMES) return local.execute(name, argumentsJson)
         val args = AiJson.parseObject(argumentsJson).orEmpty()
         return when (name) {

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
+import com.inventorysmartai.app.domain.assistant.AttachmentInfo
 import com.inventorysmartai.app.domain.assistant.ChatMessage
 import com.inventorysmartai.app.domain.assistant.ChatRole
 import com.inventorysmartai.app.domain.repository.AssistantRepository
@@ -23,7 +24,11 @@ data class AiAssistantUiState(
      *  [AssistantStepResult.ConfirmationRequired] — the screen shows [ActionConfirmationDialog]
      *  (core/designsystem/component/ConfirmationDialog.kt) whenever this is set. */
     val pendingConfirmationTextAr: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /** Files picked for the message being written; they travel with the next send and then clear. */
+    val pendingAttachments: List<AttachmentInfo> = emptyList(),
+    /** True while a picked file is being read and checked. */
+    val isAttaching: Boolean = false
 )
 
 /**
@@ -51,15 +56,52 @@ class AiAssistantViewModel @Inject constructor(
 
     fun onInputChanged(text: String) = update { it.copy(inputText = text) }
 
-    fun sendMessage() {
-        val text = _state.value.inputText.trim()
-        if (text.isEmpty() || _state.value.isSending) return
+    /** The files the person picked ([references] are content:// URIs). Each is read and checked; the ones that pass become chips. */
+    fun onFilesPicked(references: List<String>) {
+        if (references.isEmpty() || _state.value.isAttaching) return
+        val room = MAX_FILES_PER_MESSAGE - _state.value.pendingAttachments.size
+        if (room <= 0) {
+            update { it.copy(errorMessage = "الحد الأقصى $MAX_FILES_PER_MESSAGE ملفات في الرسالة الواحدة") }
+            return
+        }
+        update { it.copy(isAttaching = true, errorMessage = null) }
+        viewModelScope.launch {
+            val added = mutableListOf<AttachmentInfo>()
+            var problem: String? = null
+            for (reference in references.take(room)) {
+                val result = assistantRepository.attachFile(conversationId, reference)
+                result.onSuccess { added += it }
+                result.onFailure { if (problem == null) problem = it.message ?: "تعذّرت قراءة الملف" }
+            }
+            if (references.size > room && problem == null) problem = "أُضيفت أول $room ملفات فقط (الحد الأقصى $MAX_FILES_PER_MESSAGE في الرسالة)"
+            update { it.copy(pendingAttachments = it.pendingAttachments + added, isAttaching = false, errorMessage = problem ?: it.errorMessage) }
+        }
+    }
 
-        val userMessage = ChatMessage(id = UUID.randomUUID().toString(), role = ChatRole.USER, text = text, timestamp = System.currentTimeMillis())
-        update { it.copy(messages = it.messages + userMessage, inputText = "", isSending = true, errorMessage = null) }
+    /** The person removed a chip before sending. */
+    fun onRemoveAttachment(id: String) {
+        assistantRepository.detachFile(conversationId, id)
+        update { it.copy(pendingAttachments = it.pendingAttachments.filterNot { file -> file.id == id }) }
+    }
+
+    fun sendMessage() {
+        val current = _state.value
+        val typed = current.inputText.trim()
+        val files = current.pendingAttachments
+        if ((typed.isEmpty() && files.isEmpty()) || current.isSending || current.isAttaching) return
+        val text = typed.ifEmpty { DEFAULT_FILE_PROMPT }
+
+        val userMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            role = ChatRole.USER,
+            text = text,
+            timestamp = System.currentTimeMillis(),
+            attachments = files
+        )
+        update { it.copy(messages = it.messages + userMessage, inputText = "", pendingAttachments = emptyList(), isSending = true, errorMessage = null) }
 
         viewModelScope.launch {
-            val result = assistantRepository.sendMessage(conversationId, text, context)
+            val result = assistantRepository.sendMessage(conversationId, text, context, files.map { it.id })
             handleResult(result)
         }
     }
@@ -83,7 +125,8 @@ class AiAssistantViewModel @Inject constructor(
                     role = ChatRole.ASSISTANT,
                     text = result.text.ifBlank { "لم يصل ردّ من المساعد، يرجى المحاولة مرة أخرى." },
                     timestamp = System.currentTimeMillis(),
-                    usedLocalData = result.usedLocalData
+                    usedLocalData = result.usedLocalData,
+                    files = result.files
                 )
                 update { it.copy(messages = it.messages + assistantMessage, isSending = false, pendingConfirmationTextAr = null) }
             }
@@ -98,5 +141,10 @@ class AiAssistantViewModel @Inject constructor(
 
     private inline fun update(block: (AiAssistantUiState) -> AiAssistantUiState) {
         _state.value = block(_state.value)
+    }
+
+    private companion object {
+        const val MAX_FILES_PER_MESSAGE = 4
+        const val DEFAULT_FILE_PROMPT = "اقرأ الملف المرفق ولخّص محتواه باختصار، ثم اقترح ما يمكنك فعله به."
     }
 }

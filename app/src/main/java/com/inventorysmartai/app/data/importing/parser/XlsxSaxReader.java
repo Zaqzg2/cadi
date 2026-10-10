@@ -56,10 +56,26 @@ public final class XlsxSaxReader {
     public static final class Table {
         public final String sheetName;
         public final List<List<String>> rows;
+        /** The real 1-based sheet row number of each entry in {@link #rows} (parallel list; absent rows are skipped). */
+        public final List<Integer> rowNumbers;
+        /** Merged ranges the sheet declares, as written ("A1:C3"). */
+        public final List<String> mergedRanges;
 
         Table(String sheetName, List<List<String>> rows) {
+            this(sheetName, rows, null, null);
+        }
+
+        Table(String sheetName, List<List<String>> rows, List<Integer> rowNumbers, List<String> mergedRanges) {
             this.sheetName = sheetName;
             this.rows = rows;
+            if (rowNumbers == null) {
+                rowNumbers = new ArrayList<>();
+                for (int i = 0; i < rows.size(); i++) {
+                    rowNumbers.add(i + 1);
+                }
+            }
+            this.rowNumbers = rowNumbers;
+            this.mergedRanges = mergedRanges == null ? new ArrayList<String>() : mergedRanges;
         }
     }
 
@@ -133,7 +149,7 @@ public final class XlsxSaxReader {
         if (!found[0]) {
             throw new IllegalStateException("تعذّر العثور على بيانات الورقة \"" + target.name + "\" داخل الملف");
         }
-        return new Table(target.name, handler.rows);
+        return new Table(target.name, handler.rows, handler.rowNumbers, handler.mergedRanges);
     }
 
     // ------------------------------------------------------------------------------------
@@ -354,10 +370,14 @@ public final class XlsxSaxReader {
 
     private static final class SheetHandler extends DefaultHandler {
         final List<List<String>> rows = new ArrayList<>();
+        final List<Integer> rowNumbers = new ArrayList<>();
+        final List<String> mergedRanges = new ArrayList<>();
         private final List<String> sharedStrings;
 
         private boolean inSheetData;
         private ArrayList<String> row;
+        private int rowNumber;
+        private int lastRowNumber;
         private int nextColumn;
 
         private boolean inCell;
@@ -382,6 +402,11 @@ public final class XlsxSaxReader {
                 // so same-named elements from extension namespaces can never be mistaken for cells.
                 if (name.equals("sheetData")) {
                     inSheetData = true;
+                } else if (name.equals("mergeCell")) {
+                    String ref = attr(atts, "ref");
+                    if (ref != null && !ref.isEmpty()) {
+                        mergedRanges.add(ref);
+                    }
                 }
                 return;
             }
@@ -389,6 +414,16 @@ public final class XlsxSaxReader {
                 case "row": {
                     row = new ArrayList<>();
                     nextColumn = 0;
+                    String rowRef = attr(atts, "r");
+                    int parsedRow = -1;
+                    if (rowRef != null) {
+                        try {
+                            parsedRow = Integer.parseInt(rowRef.trim());
+                        } catch (NumberFormatException e) {
+                            parsedRow = -1;
+                        }
+                    }
+                    rowNumber = parsedRow > 0 ? parsedRow : lastRowNumber + 1;
                     break;
                 }
                 case "c": {
@@ -482,6 +517,8 @@ public final class XlsxSaxReader {
                 case "row": {
                     if (row != null) {
                         rows.add(row);
+                        rowNumbers.add(rowNumber);
+                        lastRowNumber = rowNumber;
                     }
                     row = null;
                     break;

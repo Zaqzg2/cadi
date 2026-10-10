@@ -16,6 +16,16 @@ data class DocumentExtractionResponseDto(
     val usedOcr: Boolean = false
 )
 
+@Serializable
+data class DocumentReadResponseDto(
+    /** The document's text in reading order; tables are Markdown tables. */
+    val text: String,
+    val pages: Int = 0,
+    /** Which provider read it, and whether it was OCR — informational only. */
+    val provider: String? = null,
+    val usedOcr: Boolean = false
+)
+
 // ---------- Google auth ----------
 
 @Serializable

@@ -1,12 +1,15 @@
 package com.inventorysmartai.app.data.assistant
 
 import com.inventorysmartai.app.data.ai.provider.AiChatResult
+import com.inventorysmartai.app.data.ai.provider.AiJson
 import com.inventorysmartai.app.data.ai.provider.AiToolCall
 import com.inventorysmartai.app.data.ai.provider.OpenAiMessageSanitizer
 import com.inventorysmartai.app.data.ai.provider.toProviderFailure
+import com.inventorysmartai.app.data.assistant.files.AttachmentStore
 import com.inventorysmartai.app.data.backend.AiChatGateway
 import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
+import com.inventorysmartai.app.domain.assistant.AttachmentInfo
 import com.inventorysmartai.app.domain.assistant.LocalToolExecutor
 import com.inventorysmartai.app.domain.assistant.ToolExecutionSite
 import com.inventorysmartai.app.domain.repository.AssistantRepository
@@ -27,11 +30,16 @@ import kotlin.coroutines.cancellation.CancellationException
  * ever sees Final / ConfirmationRequired / Error. The conversation is a neutral OpenAI-format list kept in memory (it is lost
  * when the app process dies) and sent in full with every turn, so the server needs no state of its own and a conversation
  * can carry on with a different provider — or a different route — after a rate limit.
+ *
+ * Files: the person can attach spreadsheets, Word files, photos and PDFs. They live in [attachments]; the model is told they
+ * exist (a short note after the question) and reads them through the file tools. Files the assistant creates while answering
+ * (a filled form, a dashboard) are collected there and handed back with the final answer.
  */
 @Singleton
 class AssistantRepositoryImpl @Inject constructor(
     private val gateway: AiChatGateway,
-    private val localToolExecutor: LocalToolExecutor
+    private val localToolExecutor: LocalToolExecutor,
+    private val attachments: AttachmentStore
 ) : AssistantRepository {
 
     /** One assistant message's tool calls, resolved one by one; OpenAI-format requires a reply for every id. */
@@ -55,15 +63,29 @@ class AssistantRepositoryImpl @Inject constructor(
     override suspend fun sendMessage(
         conversationId: String,
         message: String,
-        context: AssistantContext?
-    ): AssistantStepResult = lock.withLock { sendInternal(conversationId, message, context) }
+        context: AssistantContext?,
+        attachmentIds: List<String>
+    ): AssistantStepResult = lock.withLock { sendInternal(conversationId, message, context, attachmentIds) }
+
+    override suspend fun attachFile(conversationId: String, reference: String): Result<AttachmentInfo> =
+        attachments.add(conversationId, reference)
+
+    override fun detachFile(conversationId: String, attachmentId: String) {
+        attachments.remove(conversationId, attachmentId)
+    }
 
     override suspend fun confirmPendingAction(conversationId: String, approved: Boolean): AssistantStepResult =
         lock.withLock { confirmInternal(conversationId, approved) }
 
     // ---- send ----
 
-    private suspend fun sendInternal(conversationId: String, message: String, context: AssistantContext?): AssistantStepResult {
+    private suspend fun sendInternal(
+        conversationId: String,
+        message: String,
+        context: AssistantContext?,
+        attachmentIds: List<String>
+    ): AssistantStepResult {
+        attachments.beginTurn(conversationId)
         val history = histories.getOrPut(conversationId) {
             mutableListOf(mapOf("role" to "system", "content" to AssistantToolCatalog.systemPrompt))
         }
@@ -74,16 +96,20 @@ class AssistantRepositoryImpl @Inject constructor(
         }
 
         val mark = history.size
-        val content = context?.toPromptText()?.let { "سياق إضافي متاح للمحادثة:\n$it\n\n$message" } ?: message
+        val question = context?.toPromptText()?.let { "سياق إضافي متاح للمحادثة:\n$it\n\n$message" } ?: message
+        val note = attachments.promptNote(conversationId, attachmentIds)
+        val content = if (note.isEmpty()) question else "$question\n\n$note"
         history += mapOf("role" to "user", "content" to content)
 
         return try {
             runLoop(conversationId, history, usedLocalData = false)
         } catch (e: CancellationException) {
             rollback(history, mark)
+            attachments.takeTurnOutputs()
             throw e
         } catch (e: Exception) {
             rollback(history, mark)
+            attachments.takeTurnOutputs()
             AssistantStepResult.Error(e.toProviderFailure().messageAr)
         }
     }
@@ -112,6 +138,7 @@ class AssistantRepositoryImpl @Inject constructor(
         if (turn == null || call == null || history == null) {
             return AssistantStepResult.Error("لا يوجد إجراء بانتظار التأكيد لهذه المحادثة")
         }
+        attachments.resumeTurn(conversationId)
         return try {
             turn.results[call.id] = if (approved) runTool(call).also { turn.usedLocalData = true } else DECLINED_RESULT_JSON
             turn.awaiting = null
@@ -135,11 +162,12 @@ class AssistantRepositoryImpl @Inject constructor(
     ): AssistantStepResult {
         var usedLocal = usedLocalData
         repeat(MAX_ROUNDS) {
-            val reply = chatOnce(history)
+            val reply = chatOnce(conversationId, history)
             if (reply.toolCalls.isEmpty()) {
                 val text = reply.text.orEmpty()
                 history += mapOf("role" to "assistant", "content" to text)
-                return AssistantStepResult.Final(text, usedLocal)
+                shrinkBulkyFileResults(history)
+                return AssistantStepResult.Final(text, usedLocal, attachments.takeTurnOutputs())
             }
 
             history += mapOf(
@@ -202,15 +230,39 @@ class AssistantRepositoryImpl @Inject constructor(
         if (toolName in AssistantToolCatalog.WORKSPACE_TOOL_NAMES) ToolExecutionSite.BACKEND else ToolExecutionSite.LOCAL
 
     /** Free tiers have small tokens-per-minute budgets, so only the system prompt plus the recent turns are sent. */
-    private suspend fun chatOnce(history: List<Map<String, Any?>>): AiChatResult = gateway.chat(
+    private suspend fun chatOnce(conversationId: String, history: List<Map<String, Any?>>): AiChatResult = gateway.chat(
         messages = OpenAiMessageSanitizer.trimHistory(history, MAX_HISTORY_MESSAGES),
-        tools = AssistantToolCatalog.tools,
+        tools = AssistantToolCatalog.toolsFor(attachments.hasAttachments(conversationId)),
         temperature = 0.2,
         maxTokens = MAX_REPLY_TOKENS
     )
 
+    /**
+     * The file tools return bulky tables (a page of a form, a query result). Once the answer is written they are not needed in
+     * every later request — the model can call the tool again — so they are cut down to a short head to keep requests small
+     * (free tiers allow few tokens per minute). Other tools' results are left alone.
+     */
+    private fun shrinkBulkyFileResults(history: MutableList<Map<String, Any?>>) {
+        for (i in history.indices) {
+            val message = history[i]
+            if (message["role"] != "tool") continue
+            val toolName = message["name"] as? String ?: continue
+            val content = message["content"] as? String ?: continue
+            if (toolName !in AssistantToolCatalog.FILE_TOOL_NAMES || content.length <= SHRINK_ABOVE_CHARS) continue
+            val shrunk = AiJson.toJson(
+                mapOf(
+                    "note" to "نتيجة سابقة اختُصرت لتوفير الحجم؛ استدعِ الأداة مجددًا إن احتجت تفاصيلها",
+                    "head" to content.take(SHRINK_KEEP_CHARS)
+                )
+            )
+            history[i] = message + mapOf("content" to shrunk)
+        }
+    }
+
     private companion object {
-        const val MAX_ROUNDS = 6
+        const val SHRINK_ABOVE_CHARS = 1_500
+        const val SHRINK_KEEP_CHARS = 300
+        const val MAX_ROUNDS = 8
         const val MAX_HISTORY_MESSAGES = 30
         const val MAX_TOOL_RESULT_CHARS = 8_000
         const val MAX_REPLY_TOKENS = 2_000

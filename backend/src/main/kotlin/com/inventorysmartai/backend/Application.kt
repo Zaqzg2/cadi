@@ -3,6 +3,7 @@ package com.inventorysmartai.backend
 import com.inventorysmartai.backend.ai.AiGateway
 import com.inventorysmartai.backend.ai.AiUnavailableException
 import com.inventorysmartai.backend.ai.DocumentExtractor
+import com.inventorysmartai.backend.ai.DocumentReader
 import com.inventorysmartai.backend.ai.KtorAiTransport
 import com.inventorysmartai.backend.ai.PdfNeedsImagesException
 import com.inventorysmartai.backend.ai.RequestRejectedException
@@ -95,6 +96,7 @@ fun Application.backendModule(config: ServerConfig) {
     val transport = KtorAiTransport(httpClient)
     val gateway = AiGateway(config.providers, transport, config.providerTimeoutMs, config.totalAiTimeoutMs)
     val extractor = DocumentExtractor(gateway, transport)
+    val reader = DocumentReader(gateway, transport)
 
     val sealer = config.tokenEncryptionSecret?.let { TokenSealer(it) }
     val googleAuth = GoogleAuthService(httpClient, config.google, sealer)
@@ -195,7 +197,7 @@ fun Application.backendModule(config: ServerConfig) {
 
     routing {
         aiRoutes(gateway, guard, auditLog)
-        documentRoutes(extractor, guard, auditLog, config.maxUploadBytes)
+        documentRoutes(extractor, reader, guard, auditLog, config.maxUploadBytes)
         googleAuthRoutes(googleAuth, guard)
         googleWorkspaceRoutes(workspace, guard, config.maxUploadBytes.toLong())
         statusRoutes(gateway, googleAuth, guard)
