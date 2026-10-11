@@ -134,7 +134,7 @@ public class TableQueryTest {
     public void columnsCanBeNamedByLetterAndUnknownOnesAreExplained() {
         Map<String, Object> byLetter = TableQuery.run(sales(), map("aggregates", list(map("column", "C", "op", "sum"))));
         assertEquals(29L, ((Number) rowsOf(byLetter).get(0).get(0)).longValue());
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 TableQuery.run(sales(), map("groupBy", list("لا يوجد")));
             }

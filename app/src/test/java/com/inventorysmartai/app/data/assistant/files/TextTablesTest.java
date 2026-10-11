@@ -98,7 +98,7 @@ public class TextTablesTest {
         zip.closeEntry();
         zip.close();
         final byte[] bytes = bos.toByteArray();
-        assertThrows(IOException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IOException.class, new org.junit.function.ThrowingRunnable() {
             public void run() throws Throwable {
                 TextTables.docxText(bytes);
             }

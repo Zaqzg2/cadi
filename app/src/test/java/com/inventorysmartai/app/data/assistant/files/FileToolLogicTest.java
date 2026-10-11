@@ -87,28 +87,28 @@ public class FileToolLogicTest {
     @Test
     public void unusableFilesAreRefusedWithAHint() throws Exception {
         final byte[] ole = bytes(0xD0, 0xCF, 0x11, 0xE0, 1, 2, 3, 4);
-        assertTrue(assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertTrue(assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileKinds.detect("old.xls", null, ole);
             }
         }).getMessage().contains(".xlsx"));
         final byte[] pptx = zipWith("ppt/presentation.xml");
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() throws Throwable {
                 FileKinds.detect("deck.pptx", null, pptx);
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileKinds.detect("data.bin", null, bytes(1, 2, 3, 4));
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileKinds.detect("empty.txt", null, new byte[0]);
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileKinds.detect("anim.gif", null, "GIF89a....".getBytes(StandardCharsets.US_ASCII));
             }
@@ -143,7 +143,7 @@ public class FileToolLogicTest {
     @Test
     public void readingAnUnknownSheetListsTheRealOnes() {
         final WorkbookData book = salesBook();
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileToolLogic.readWorkbook(book, map("sheet", "لا توجد"));
             }
@@ -181,7 +181,7 @@ public class FileToolLogicTest {
         assertEquals(2L, ((Number) ((Map<?, ?>) results.get(0)).get("value")).longValue());
         assertTrue(((Map<?, ?>) results.get(1)).containsKey("error"));
         assertEquals(5L, ((Number) ((Map<?, ?>) results.get(2)).get("value")).longValue());
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileToolLogic.calculate(map());
             }
@@ -219,12 +219,12 @@ public class FileToolLogicTest {
 
     @Test
     public void badEditRequestsAreExplained() {
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileToolLogic.parseEdits(map());
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileToolLogic.parseEdits(map("cells", list(map("value", "x"))));
             }
@@ -233,7 +233,7 @@ public class FileToolLogicTest {
         for (int i = 0; i < 401; i++) {
             many.add(map("cell", "A" + (i + 1), "value", i));
         }
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileToolLogic.parseEdits(map("cells", many));
             }
@@ -251,7 +251,7 @@ public class FileToolLogicTest {
         List<XlsxWriter.SheetSpec> full = FileToolLogic.parseSheets(map(
                 "sheets", list(map("name", "أ", "headers", list("x"), "rows", list(list(1))), map("name", "فارغة"), map("name", "ب", "rows", list(list(2))))));
         assertEquals(2, full.size()); // the empty sheet is dropped
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileToolLogic.parseSheets(map("headers", list(), "rows", list()));
             }
@@ -305,7 +305,7 @@ public class FileToolLogicTest {
     @Test
     public void dashboardSourcesFailLoudlyWhenTheFileIsUnknown() {
         final Map<String, Object> args = map("kpis", list(map("label", "x", "source", map("attachmentId", "zzz", "aggregates", list(map("op", "count"))))));
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 FileToolLogic.dashboardHtml(args, new Function<String, WorkbookData>() {
                     @Override

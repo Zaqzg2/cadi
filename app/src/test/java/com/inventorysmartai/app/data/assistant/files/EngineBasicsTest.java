@@ -139,32 +139,32 @@ public class EngineBasicsTest {
 
     @Test
     public void calculatorRefusesAnythingElse() {
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 ExpressionEvaluator.evaluate("1/(2-2)");
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 ExpressionEvaluator.evaluate("System.exit(0)");
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 ExpressionEvaluator.evaluate("2+");
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 ExpressionEvaluator.evaluate("unknown(1)");
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 ExpressionEvaluator.evaluate("1e3");
             }
         });
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 ExpressionEvaluator.evaluate("");
             }
@@ -173,7 +173,7 @@ public class EngineBasicsTest {
         for (int i = 0; i < 500; i++) {
             longText.append("+1");
         }
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 ExpressionEvaluator.evaluate(longText.toString());
             }
@@ -273,7 +273,7 @@ public class EngineBasicsTest {
         g.put("commissions", new ArrayList<Object>(Arrays.asList(5)));
         final Map<String, Object> spec = new LinkedHashMap<String, Object>();
         spec.put("groups", new ArrayList<Object>(Arrays.asList(g)));
-        assertThrows(IllegalArgumentException.class, new org.junit.Assert.ThrowingRunnable() {
+        assertThrows(IllegalArgumentException.class, new org.junit.function.ThrowingRunnable() {
             public void run() {
                 CommissionCalculator.calculate(spec);
             }
