@@ -21,7 +21,7 @@ import javax.inject.Singleton
  * The app's networking. By default every call goes to this app's own backend ([BuildConfig.BACKEND_BASE_URL]) — never
  * straight to an AI provider or a Google API — which is what keeps the provider keys and the Google OAuth client secret out
  * of the APK (see backend/README.md). The one exception is the OPTIONAL direct mode: when the person saves their own provider
- * keys and turns it on, the same client also reaches Mistral / Groq / OpenRouter (BackendHeadersInterceptor makes sure the
+ * keys and turns it on, the same client also reaches Gemini / Mistral / Groq / OpenRouter and OCR.space (BackendHeadersInterceptor makes sure the
  * backend's app key is never sent to them).
  */
 @Module

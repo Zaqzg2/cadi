@@ -2,13 +2,18 @@ package com.inventorysmartai.app.data.assistant.files
 
 import com.inventorysmartai.app.data.ai.AiConfig
 import com.inventorysmartai.app.data.ai.AiFileTooLargeException
+import com.inventorysmartai.app.data.ai.AiTimeoutException
+import com.inventorysmartai.app.data.ai.provider.AiProviderSettings
+import com.inventorysmartai.app.data.ai.provider.DirectDocumentReader
 import com.inventorysmartai.app.data.ai.provider.PdfRasterizer
 import com.inventorysmartai.app.data.ai.provider.toProviderFailure
 import com.inventorysmartai.app.data.backend.BackendConfig
+import com.inventorysmartai.app.data.backend.isBackendOutage
 import com.inventorysmartai.app.data.remote.BackendApi
 import com.inventorysmartai.app.data.remote.BackendFailure
 import com.inventorysmartai.app.data.remote.safeApiCall
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -17,25 +22,51 @@ import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Photo / PDF -> text, done by the app's own backend (POST /v1/documents/read): Mistral OCR when the server has a key,
- * a vision model otherwise. This is what lets the assistant "look at" an attached picture of a price list or a target sheet.
+ * Photo / PDF -> text. This is what lets the assistant "look at" an attached picture of a price list or a target sheet.
+ * Same routing as every other AI feature:
+ *  - the app's own backend (POST /v1/documents/read: Mistral OCR when the server has a key, a vision model otherwise) — the default;
+ *  - the person's own keys ([DirectDocumentReader]: Mistral OCR / OCR.space, then a vision model such as Gemini) when they chose
+ *    "use my own keys", when this build has no backend, or when the backend is down and they saved keys.
  *
- * Like the document import, it re-sends a PDF as page images when the server says it cannot read the PDF itself
+ * Like the document import, the backend route re-sends a PDF as page images when the server says it cannot read the PDF itself
  * (422 PDF_NEEDS_IMAGES), and converts HEIC photos to JPEG first, since the server accepts only PDF/JPEG/PNG/WebP.
- * Without the backend (the person chose their own provider keys) there is nothing to read with, and it says so.
  */
 @Singleton
 class AttachmentTextReader @Inject constructor(
     private val api: BackendApi,
     private val moshi: Moshi,
-    private val rasterizer: PdfRasterizer
+    private val rasterizer: PdfRasterizer,
+    private val settings: AiProviderSettings,
+    private val direct: DirectDocumentReader
 ) {
     private class UploadPart(val bytes: ByteArray, val mimeType: String)
 
     suspend fun read(bytes: ByteArray, mimeType: String, sessionId: String): Result<String> {
-        BackendConfig.configurationProblem()?.let {
-            return Result.failure(BackendFailure.Structured("BACKEND_NOT_CONFIGURED", it))
-        }
+        val hasOwnKeys = settings.hasAnyDirectAccess()
+        val backendProblem = BackendConfig.configurationProblem()
+        if (hasOwnKeys && (settings.current().preferDirect || backendProblem != null)) return readDirect(bytes, mimeType)
+        if (backendProblem != null) return Result.failure(BackendFailure.Structured("BACKEND_NOT_CONFIGURED", backendProblem))
+
+        val viaBackend = readViaBackend(bytes, mimeType, sessionId)
+        if (viaBackend.isSuccess || !hasOwnKeys) return viaBackend
+        val failure = viaBackend.exceptionOrNull()
+        if (failure == null || !failure.isBackendOutage()) return viaBackend
+        val viaDirect = readDirect(bytes, mimeType)
+        return if (viaDirect.isSuccess) viaDirect else viaBackend
+    }
+
+    private suspend fun readDirect(bytes: ByteArray, mimeType: String): Result<String> = try {
+        // OCR plus up to a few providers in turn, so the budget is three single-request timeouts.
+        val text = withTimeoutOrNull(AiConfig.DIRECT_IMPORT_BUDGET_MS) { direct.read(bytes, mimeType) }
+            ?: throw AiTimeoutException()
+        Result.success(text)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e.toProviderFailure())
+    }
+
+    private suspend fun readViaBackend(bytes: ByteArray, mimeType: String, sessionId: String): Result<String> {
         if (bytes.size > AiConfig.MAX_INLINE_BYTES) {
             return Result.failure(AiFileTooLargeException(bytes.size, AiConfig.MAX_INLINE_BYTES).toProviderFailure())
         }

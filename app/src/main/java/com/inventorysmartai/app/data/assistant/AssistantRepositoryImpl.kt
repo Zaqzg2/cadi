@@ -173,8 +173,14 @@ class AssistantRepositoryImpl @Inject constructor(
             history += mapOf(
                 "role" to "assistant",
                 "content" to reply.text.orEmpty(),
-                "tool_calls" to reply.toolCalls.map {
-                    mapOf("id" to it.id, "type" to "function", "function" to mapOf("name" to it.name, "arguments" to it.argumentsJson))
+                "tool_calls" to reply.toolCalls.map { call ->
+                    buildMap<String, Any?> {
+                        put("id", call.id)
+                        put("type", "function")
+                        put("function", mapOf("name" to call.name, "arguments" to call.argumentsJson))
+                        // Gemini 3 wants its "thought signature" echoed back with the call (see OpenAiMessageSanitizer).
+                        call.extraContent?.let { put("extra_content", it) }
+                    }
                 }
             )
             val turn = PendingTurn(reply.toolCalls, usedLocal)

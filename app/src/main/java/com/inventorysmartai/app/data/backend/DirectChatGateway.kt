@@ -13,7 +13,7 @@ import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * The OPTIONAL no-backend route: the assistant's model call goes straight from the phone to Groq / Mistral / OpenRouter with
+ * The OPTIONAL no-backend route: the assistant's model call goes straight from the phone to Gemini / Groq / Mistral / OpenRouter with
  * the keys the person saved in Settings, trying them in their priority order until one answers.
  */
 @Singleton

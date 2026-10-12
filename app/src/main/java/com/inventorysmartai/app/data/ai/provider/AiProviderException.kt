@@ -19,3 +19,8 @@ class AiProviderEmptyException(val provider: AiProviderId) : Exception("${provid
 
 /** No provider has a key (or all are switched off). */
 class AiNoProviderConfiguredException : Exception("No direct AI provider is configured")
+
+/** OCR.space refused or failed a request. [detail] is OCR.space's own message (never the key). */
+class OcrSpaceException(val kind: Kind, val detail: String) : Exception("OCR.space ${kind.name}: $detail") {
+    enum class Kind { INVALID_KEY, QUOTA, TOO_LARGE, FAILED }
+}

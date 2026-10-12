@@ -90,7 +90,7 @@ abstract class RepositoryModule {
 
     // --- Phase 4: AI + Google ecosystem ---
     // The BACKEND is the default route for every AI feature. The two routers below send a request to the backend, or — only when
-    // the person saved their own Groq/Mistral/OpenRouter keys and chose "use my own keys" (or the backend is unavailable and keys
+    // the person saved their own Gemini/Groq/Mistral/OpenRouter/OCR.space keys and chose "use my own keys" (or the backend is unavailable and keys
     // exist) — straight to those providers. The assistant's tool loop always runs on the phone against the local database.
     @Binds @Singleton abstract fun bindAssistantRepository(impl: AssistantRepositoryImpl): AssistantRepository
     @Binds @Singleton abstract fun bindLocalToolExecutor(impl: AssistantToolExecutor): LocalToolExecutor

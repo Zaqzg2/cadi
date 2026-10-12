@@ -17,13 +17,14 @@ internal fun Throwable.toProviderFailure(): BackendFailure {
     return when (this) {
         is AiNoProviderConfiguredException -> BackendFailure.Structured(
             "AI_NOT_CONFIGURED",
-            "لم تُضَف مفاتيح الذكاء الاصطناعي بعد. افتح الإعدادات ← إعدادات الذكاء الاصطناعي وأضف مفتاح Mistral أو Groq أو OpenRouter."
+            "لم تُضَف مفاتيح الذكاء الاصطناعي بعد. افتح الإعدادات ← إعدادات الذكاء الاصطناعي وأضف مفتاح Gemini (مجاني) أو Mistral أو Groq أو OpenRouter."
         )
         is AiFileTooLargeException -> BackendFailure.Structured(
             "AI_FILE_TOO_LARGE",
             "حجم الملف كبير جدًا للتحليل بالذكاء الاصطناعي (الحد الأقصى ${limitBytes / (1024 * 1024)} ميغابايت). جرّب صورة أصغر أو قسّم الملف."
         )
         is AiProviderHttpException -> httpFailure()
+        is OcrSpaceException -> ocrFailure()
         is AiProviderEmptyException, is AiInvalidOutputException -> BackendFailure.Structured(
             "AI_INVALID_OUTPUT",
             "لم يُرجع الذكاء الاصطناعي نتيجة صالحة. جرّب مستندًا أوضح أو أعد المحاولة."
@@ -77,4 +78,23 @@ private fun AiProviderHttpException.httpFailure(): BackendFailure {
             }
         )
     }
+}
+
+private fun OcrSpaceException.ocrFailure(): BackendFailure = when (kind) {
+    OcrSpaceException.Kind.INVALID_KEY -> BackendFailure.Structured(
+        "OCR_INVALID_KEY",
+        "مفتاح OCR.space غير صالح. راجع المفتاح في إعدادات الذكاء الاصطناعي."
+    )
+    OcrSpaceException.Kind.QUOTA -> BackendFailure.Structured(
+        "AI_QUOTA_EXCEEDED",
+        "تم تجاوز حدّ الاستخدام المجاني لدى OCR.space مؤقتًا. حاول بعد قليل."
+    )
+    OcrSpaceException.Kind.TOO_LARGE -> BackendFailure.Structured(
+        "AI_FILE_TOO_LARGE",
+        "الصورة أكبر من الحجم الذي تقبله الخطة المجانية في OCR.space (1 ميغابايت). جرّب صورة أصغر."
+    )
+    OcrSpaceException.Kind.FAILED -> BackendFailure.Structured(
+        "OCR_FAILED",
+        if (BuildConfig.DEBUG) "تعذّرت القراءة الضوئية عبر OCR.space ($detail)" else "تعذّرت القراءة الضوئية عبر OCR.space، حاول مرة أخرى."
+    )
 }

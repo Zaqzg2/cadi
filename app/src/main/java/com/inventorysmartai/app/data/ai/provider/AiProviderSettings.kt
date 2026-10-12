@@ -24,16 +24,20 @@ data class ProviderConfig(
     val visionModel: String
 )
 
+/** OCR.space (a plain OCR service, not a chat model) as the settings screen shows it. */
+data class OcrSpaceConfig(val enabled: Boolean, val hasKey: Boolean)
+
 data class AiProviderSnapshot(
     /** In priority order — the first usable one is tried first, the rest are automatic fallbacks. */
     val providers: List<ProviderConfig>,
-    /** Read documents with Mistral OCR first (best for Arabic) when a Mistral key exists. */
-    val preferMistralOcr: Boolean,
+    /** Read documents with an OCR engine first (Mistral OCR, OCR.space — best for Arabic) when a key for one exists. */
+    val preferOcr: Boolean,
     /**
      * false (the default): every AI request goes through the app's own backend, which holds the provider keys.
      * true: the person chose to use the keys saved on THIS phone directly, bypassing the backend.
      */
-    val preferDirect: Boolean = false
+    val preferDirect: Boolean = false,
+    val ocrSpace: OcrSpaceConfig = OcrSpaceConfig(enabled = true, hasKey = false)
 )
 
 /** A provider that is switched on AND has a key — everything a request needs. Never logged, never shown. */
@@ -44,6 +48,11 @@ class ActiveProvider(
     val visionModel: String
 ) {
     override fun toString(): String = "ActiveProvider(${id.name})" // keep the key out of any accidental log
+}
+
+/** An OCR.space key that is switched on. Never logged, never shown. */
+class ActiveOcrSpace(val apiKey: String) {
+    override fun toString(): String = "ActiveOcrSpace"
 }
 
 /**
@@ -66,8 +75,13 @@ class AiProviderSettings @Inject constructor(
     private fun textKey(id: AiProviderId) = stringPreferencesKey("text_model_${id.name}")
     private fun visionKey(id: AiProviderId) = stringPreferencesKey("vision_model_${id.name}")
     private val orderKey = stringPreferencesKey("order")
+
+    // The stored name stays "prefer_mistral_ocr": it was the only OCR engine when the setting was created, and renaming the
+    // key would silently reset what people already chose.
     private val preferOcrKey = booleanPreferencesKey("prefer_mistral_ocr")
     private val preferDirectKey = booleanPreferencesKey("prefer_direct")
+    private val ocrSpaceKeyKey = stringPreferencesKey("key_OCR_SPACE")
+    private val ocrSpaceEnabledKey = booleanPreferencesKey("enabled_OCR_SPACE")
 
     val snapshot: Flow<AiProviderSnapshot> = store.data.map { it.toSnapshot() }
 
@@ -77,6 +91,9 @@ class AiProviderSettings @Inject constructor(
         val saved = this[orderKey].orEmpty().split(',').mapNotNull { AiProviderId.fromNameOrNull(it.trim()) }.distinct()
         return saved + AiProviderId.DEFAULT_ORDER.filter { it !in saved }
     }
+
+    private fun Preferences.ocrSpaceKey(): String? =
+        this[ocrSpaceKeyKey]?.let(cipher::decrypt)?.trim()?.takeIf { it.isNotEmpty() }
 
     private fun Preferences.toSnapshot() = AiProviderSnapshot(
         providers = order().map { id ->
@@ -88,8 +105,12 @@ class AiProviderSettings @Inject constructor(
                 visionModel = this[visionKey(id)]?.takeIf { it.isNotBlank() } ?: id.defaultVisionModel
             )
         },
-        preferMistralOcr = this[preferOcrKey] ?: true,
-        preferDirect = this[preferDirectKey] ?: false
+        preferOcr = this[preferOcrKey] ?: true,
+        preferDirect = this[preferDirectKey] ?: false,
+        ocrSpace = OcrSpaceConfig(
+            enabled = this[ocrSpaceEnabledKey] ?: true,
+            hasKey = ocrSpaceKey() != null
+        )
     )
 
     /** Enabled providers with a readable key, in priority order. */
@@ -140,13 +161,34 @@ class AiProviderSettings @Inject constructor(
         }
     }
 
-    suspend fun setPreferMistralOcr(value: Boolean) {
+    suspend fun setPreferOcr(value: Boolean) {
         store.edit { it[preferOcrKey] = value }
     }
 
     suspend fun setPreferDirect(value: Boolean) {
         store.edit { it[preferDirectKey] = value }
     }
+
+    // ---- OCR.space ----
+
+    /** The OCR.space key when it is switched on and readable; null otherwise. */
+    suspend fun activeOcrSpace(): ActiveOcrSpace? {
+        val prefs = store.data.first()
+        if (!(prefs[ocrSpaceEnabledKey] ?: true)) return null
+        return prefs.ocrSpaceKey()?.let { ActiveOcrSpace(it) }
+    }
+
+    suspend fun setOcrSpaceKey(key: String) {
+        val trimmed = key.trim()
+        store.edit { if (trimmed.isEmpty()) it.remove(ocrSpaceKeyKey) else it[ocrSpaceKeyKey] = cipher.encrypt(trimmed) }
+    }
+
+    suspend fun setOcrSpaceEnabled(enabled: Boolean) {
+        store.edit { it[ocrSpaceEnabledKey] = enabled }
+    }
+
+    /** Any key the direct route can use: a chat provider, or OCR.space (which can read a photo or PDF on its own). */
+    suspend fun hasAnyDirectAccess(): Boolean = hasAnyActive() || activeOcrSpace() != null
 
     private companion object {
         const val STORE_NAME = "ai_provider_settings"

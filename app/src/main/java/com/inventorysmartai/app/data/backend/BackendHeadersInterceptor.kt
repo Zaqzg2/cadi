@@ -6,7 +6,7 @@ import okhttp3.Response
 
 /**
  * Adds the app key and the Google link token to requests going to OUR backend — and ONLY those. The same OkHttp client
- * also carries requests to Mistral/Groq/OpenRouter when the user opts into direct mode, so the host check below is what
+ * also carries requests to Gemini/Mistral/Groq/OpenRouter and OCR.space when the user opts into direct mode, so the host check below is what
  * guarantees these two values can never leak to a third party.
  */
 class BackendHeadersInterceptor(

@@ -42,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
+import com.inventorysmartai.app.data.ai.provider.OcrSpaceConfig
 import com.inventorysmartai.app.data.ai.provider.ProviderConfig
 
 @Composable
@@ -105,17 +106,29 @@ fun AiProvidersScreen(navController: NavController, viewModel: AiProvidersViewMo
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                                Text("قراءة المستندات بـ Mistral OCR أولًا", style = MaterialTheme.typography.bodyMedium)
+                                Text("قراءة المستندات بمحرّك OCR أولًا", style = MaterialTheme.typography.bodyMedium)
                                 Text(
-                                    "الأدق للعربية والجداول؛ يتطلب مفتاح Mistral.",
+                                    "يستخدم Mistral OCR أو OCR.space إن وُجد مفتاح (الأدق للعربية والجداول). عند الإيقاف تُقرأ الصور مباشرةً بنموذج الرؤية، مثل Gemini.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.outline
                                 )
                             }
-                            Switch(checked = state.snapshot.preferMistralOcr, onCheckedChange = viewModel::setPreferMistralOcr)
+                            Switch(checked = state.snapshot.preferOcr, onCheckedChange = viewModel::setPreferOcr)
                         }
                     }
                 }
+            }
+
+            item {
+                OcrSpaceCard(
+                    config = state.snapshot.ocrSpace,
+                    testing = state.ocrTesting,
+                    message = state.ocrMessage,
+                    onEnabled = viewModel::setOcrEnabled,
+                    onSaveKey = viewModel::saveOcrKey,
+                    onClearKey = viewModel::clearOcrKey,
+                    onTest = viewModel::testOcr
+                )
             }
 
             itemsIndexed(state.snapshot.providers, key = { _, p -> p.id.name }) { index, config ->
@@ -220,6 +233,70 @@ private fun ProviderCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline
             )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = onTest, enabled = !testing && config.hasKey) { Text("اختبار الاتصال") }
+                if (testing) CircularProgressIndicator(modifier = Modifier.padding(2.dp))
+            }
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
+    }
+}
+
+@Composable
+private fun OcrSpaceCard(
+    config: OcrSpaceConfig,
+    testing: Boolean,
+    message: String?,
+    onEnabled: (Boolean) -> Unit,
+    onSaveKey: (String) -> Unit,
+    onClearKey: () -> Unit,
+    onTest: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+    var keyInput by remember { mutableStateOf("") }
+    val ltr = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr)
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("OCR.space — قراءة الصور وPDF", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (config.hasKey) "المفتاح: محفوظ" else "المفتاح: غير مُدخل",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (config.hasKey) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                    )
+                }
+                Switch(checked = config.enabled, onCheckedChange = onEnabled)
+            }
+            Text(
+                "خدمة قراءة نصوص مجانية تدعم العربية. الخطة المجانية: 25,000 طلب شهريًا وبحدّ 500 يوميًا، والمحرك الأدق للعربية (3) له حصة " +
+                    "شهرية أصغر. يضغط التطبيق الصور تلقائيًا لتناسب حدّ 1 ميغابايت، ويقرأ أول 3 صفحات من ملف PDF.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            Text(
+                "لا تُنظّم البيانات وحدها: تحتاج مفتاح مزوّد نصوص (مثل Gemini) ليحوّل النص المقروء إلى جدول. تُرسَل صورة المستند إلى خوادم OCR.space.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+
+            OutlinedTextField(
+                value = keyInput,
+                onValueChange = { keyInput = it },
+                label = { Text(if (config.hasKey) "استبدال المفتاح" else "مفتاح API") },
+                singleLine = true,
+                textStyle = ltr,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { onSaveKey(keyInput); keyInput = "" }, enabled = keyInput.isNotBlank()) { Text("حفظ المفتاح") }
+                if (config.hasKey) OutlinedButton(onClick = onClearKey) { Text("حذف") }
+                TextButton(onClick = { uriHandler.openUri("https://ocr.space/ocrapi/freekey") }) { Text("الحصول على مفتاح") }
+            }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = onTest, enabled = !testing && config.hasKey) { Text("اختبار الاتصال") }

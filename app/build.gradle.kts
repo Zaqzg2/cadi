@@ -23,6 +23,10 @@ val googleServerClientId = configValue("GOOGLE_BACKEND_SERVER_CLIENT_ID", "CHANG
 val backendAppKey = configValue("BACKEND_APP_KEY", "")
 val backendUrlDebug = configValue("BACKEND_BASE_URL_DEBUG", "http://10.0.2.2:8080/")
 val backendUrlRelease = configValue("BACKEND_BASE_URL", "https://CHANGE-ME.example.com/")
+// The "optimized" build type (see buildTypes below) shrinks the code with R8. It is on by default; if shrinking ever breaks something
+// at runtime, set OPTIMIZED_MINIFY=false (a -P flag, gradle.properties, or a GitHub Actions *variable*) to get the same non-debuggable
+// build WITHOUT R8, then send the CI log so the keep rules can be fixed. Details: docs/OPTIMIZED_BUILD.md.
+val optimizedShrink = configValue("OPTIMIZED_MINIFY", "true").toBoolean()
 
 android {
     namespace = "com.inventorysmartai.app"
@@ -77,6 +81,21 @@ android {
             // guessed-at "probably production" URL. See backend/README.md for what to deploy.
             buildConfigField("String", "BACKEND_BASE_URL", "\"${backendUrlRelease}\"")
         }
+        // The same app, built for speed and size: not debuggable (no debug checks, much smoother Compose), and shrunk/optimized by R8
+        // with unused resources removed. It deliberately shares the DEBUG build's package id and signing key, so it installs OVER the
+        // debug app you already have — your local data and the Google sign-in registration (package + key) keep working; it is the same
+        // release-style code, just something you can sideload without a release keystore. Built next to the debug APK by CI
+        // (`./gradlew :app:assembleOptimized`). Server address and app key come from the same settings as the release build.
+        create("optimized") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+            isMinifyEnabled = optimizedShrink
+            isShrinkResources = optimizedShrink
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-optimized"
+            signingConfig = signingConfigs.getByName("debug")
+        }
         debug {
             isDebuggable = true
             applicationIdSuffix = ".debug"
@@ -85,6 +104,12 @@ android {
             // device needs the host's real LAN IP instead.
             buildConfigField("String", "BACKEND_BASE_URL", "\"${backendUrlDebug}\"")
         }
+    }
+
+    // lint's "vital" pass runs on every non-debuggable build (release, optimized) and can abort it on an unrelated fatal finding; this project
+    // does not ship through a release pipeline, and the optimized build must not be blocked by it.
+    lint {
+        checkReleaseBuilds = false
     }
 
     compileOptions {

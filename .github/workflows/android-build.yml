@@ -22,6 +22,9 @@ jobs:
       BACKEND_BASE_URL_DEBUG: ${{ secrets.BACKEND_BASE_URL }}
       BACKEND_APP_KEY: ${{ secrets.BACKEND_APP_KEY }}
       GOOGLE_BACKEND_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_BACKEND_SERVER_CLIENT_ID }}
+      # Optional (Settings > Secrets and variables > Actions > *Variables*): set to false to build the optimized APK WITHOUT R8 shrinking
+      # if shrinking ever breaks something at runtime. Blank = shrink (default). See docs/OPTIMIZED_BUILD.md.
+      OPTIMIZED_MINIFY: ${{ vars.OPTIMIZED_MINIFY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,6 +56,22 @@ jobs:
           set -o pipefail
           ./gradlew :app:assembleDebug --stacktrace 2>&1 | tee build-output.log
         continue-on-error: true
+
+      # The same app built for speed and size (R8 shrinking, not debuggable). Same package id and signing key as the debug APK, so it installs
+      # OVER it and keeps your data. Informational like the Docker check: if R8 trips on something it NEVER blocks the debug APK - the log (and
+      # R8's missing_rules.txt) is uploaded with the failure logs and shows up as a warning on the run.
+      # R8 over Compose + the extended icon set is the one step here that is memory-hungry, so this invocation gets a larger Gradle heap than
+      # gradle.properties gives the rest of the build (a different heap makes Gradle start its own daemon for this step - a few seconds).
+      - name: Build optimized APK
+        id: build_optimized
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleOptimized "-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8" --stacktrace 2>&1 | tee optimized-build-output.log
+        continue-on-error: true
+
+      - name: Warn if the optimized APK did not build
+        if: steps.build_optimized.outcome == 'failure'
+        run: echo "::warning::The optimized APK failed to build - see optimized-build-output.log in the ci-failure-logs artifact (the debug APK is unaffected)."
 
       - name: Run app unit tests
         id: app_tests
@@ -92,10 +111,12 @@ jobs:
         run: echo "::warning::The backend Docker image failed to build - see the 'Build backend Docker image' step before deploying."
 
       - name: Collect failure logs
-        if: steps.build.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure' || steps.docker_build.outcome == 'failure'
+        if: steps.build.outcome == 'failure' || steps.build_optimized.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure' || steps.docker_build.outcome == 'failure'
         run: |
           mkdir -p ci-failure-logs
           cp build-output.log ci-failure-logs/ 2>/dev/null || true
+          cp optimized-build-output.log ci-failure-logs/ 2>/dev/null || true
+          [ -d app/build/outputs/mapping/optimized ] && cp -r app/build/outputs/mapping/optimized ci-failure-logs/optimized-r8-output
           cp unit-test-output.log ci-failure-logs/ 2>/dev/null || true
           cp backend-test-output.log ci-failure-logs/ 2>/dev/null || true
           cp backend-build-output.log ci-failure-logs/ 2>/dev/null || true
@@ -105,7 +126,7 @@ jobs:
           exit 0
 
       - name: Upload failure logs
-        if: steps.build.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure' || steps.docker_build.outcome == 'failure'
+        if: steps.build.outcome == 'failure' || steps.build_optimized.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure' || steps.docker_build.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: ci-failure-logs
@@ -121,7 +142,24 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      # The Docker image is a deployment check only; everything else turns the run red when it fails.
+      - name: Upload optimized APK
+        if: ${{ always() && steps.build_optimized.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: inventory-smart-ai-optimized-apk
+          path: app/build/outputs/apk/optimized/*.apk
+          if-no-files-found: error
+
+      # R8's mapping.txt: only needed to read an obfuscated crash stack trace, never to run the app.
+      - name: Upload optimized mapping file
+        if: ${{ always() && steps.build_optimized.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: inventory-smart-ai-optimized-mapping
+          path: app/build/outputs/mapping/optimized/mapping.txt
+          if-no-files-found: ignore
+
+      # The Docker image and the optimized APK are informational only; everything else turns the run red when it fails.
       - name: Fail job if the APK, a test, or the backend build failed
         if: ${{ always() && (steps.build.outcome == 'failure' || steps.app_tests.outcome == 'failure' || steps.backend_tests.outcome == 'failure' || steps.build_backend.outcome == 'failure') }}
         run: exit 1

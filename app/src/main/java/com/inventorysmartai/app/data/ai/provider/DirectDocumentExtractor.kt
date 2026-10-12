@@ -17,17 +17,19 @@ import kotlin.coroutines.cancellation.CancellationException
  * Document -> [AiExtractionDocument] using only the user's own provider keys.
  *
  * Arabic reading quality is the weak point of free vision models, so the pipeline has two stages:
- *  1. READ   — Mistral OCR turns the PDF/photo into Markdown text (when a Mistral key exists and the
- *              "OCR first" switch is on).
+ *  1. READ   — an OCR engine turns the PDF/photo into text (see [DirectOcrReader]: Mistral OCR, then OCR.space), when a key for
+ *              one exists and the "OCR first" switch is on.
  *  2. STRUCTURE — any enabled provider (priority order, automatic fallback on rate-limit/outage) turns that
  *              text into the app's JSON shape.
- * If there is no OCR text (no Mistral key, OCR failed), every provider is tried with the page IMAGE(S)
- * directly (vision). Whatever comes back is only ever a *draft*: it still goes through the existing
- * normaliser/validator/matcher and the human review screen before anything is saved.
+ * If there is no OCR text (no OCR key, OCR failed), every provider is tried with the page IMAGE(S)
+ * directly (vision) — which is the normal path with only a Gemini key, since Gemini reads Arabic photos well. Whatever comes
+ * back is only ever a *draft*: it still goes through the existing normaliser/validator/matcher and the human review screen
+ * before anything is saved.
  */
 @Singleton
 class DirectDocumentExtractor @Inject constructor(
     private val client: OpenAiCompatClient,
+    private val ocrReader: DirectOcrReader,
     private val settings: AiProviderSettings,
     private val rasterizer: PdfRasterizer,
     private val moshi: Moshi
@@ -46,17 +48,14 @@ class DirectDocumentExtractor @Inject constructor(
         val instruction = buildInstruction(documentType)
         var lastError: Throwable? = null
 
-        // ---- Stage 1: read (Mistral OCR) ----
+        // ---- Stage 1: read (Mistral OCR / OCR.space) ----
         val mistral = providers.firstOrNull { it.id == AiProviderId.MISTRAL }
+        val ocrSpaceKey = settings.activeOcrSpace()
         var ocrText: String? = null
-        if (mistral != null && settings.current().preferMistralOcr) {
-            try {
-                ocrText = readWithMistralOcr(mistral, fileBytes, mimeType)?.takeIf { it.isNotBlank() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                lastError = e
-            }
+        if (settings.current().preferOcr && (mistral != null || ocrSpaceKey != null)) {
+            val outcome = ocrReader.read(mistral, ocrSpaceKey, fileBytes, mimeType)
+            ocrText = outcome.text
+            if (ocrText == null) lastError = outcome.error
         }
 
         // ---- Stage 2a: structure the OCR text ----
@@ -98,13 +97,6 @@ class DirectDocumentExtractor @Inject constructor(
             }
         }
         throw lastError ?: AiInvalidOutputException("No provider produced a result")
-    }
-
-    private suspend fun readWithMistralOcr(mistral: ActiveProvider, bytes: ByteArray, mimeType: String): String? {
-        // Mistral OCR reads PDF, JPEG, PNG and WebP; a HEIC photo is converted first.
-        if (mimeType == "application/pdf" || mimeType in OCR_IMAGE_TYPES) return client.ocr(mistral, mimeType, bytes)
-        val converted = rasterizer.prepare(bytes, mimeType, 1).firstOrNull() ?: return null
-        return client.ocr(mistral, converted.mimeType, converted.bytes)
     }
 
     private suspend fun structure(
@@ -151,6 +143,5 @@ class DirectDocumentExtractor @Inject constructor(
         const val MAX_OCR_CHARS = 40_000
         const val MAX_VISION_PAGES = 3 // Groq accepts at most 3 images per request
         const val MAX_OUTPUT_TOKENS = 8_000
-        val OCR_IMAGE_TYPES = setOf("image/jpeg", "image/png", "image/webp")
     }
 }
