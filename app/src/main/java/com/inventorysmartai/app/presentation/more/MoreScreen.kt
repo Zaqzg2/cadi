@@ -32,13 +32,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 private data class MoreItem(val label: String, val icon: ImageVector, val route: String)
 
 private val moreItems = listOf(
     MoreItem("الأهداف والعمولات", Icons.Filled.Flag, Destination.Goals.route),
-    MoreItem("المشتريات", Icons.Filled.ShoppingCart, Destination.PurchaseList.route),
-    MoreItem("التقارير", Icons.Filled.BarChart, Destination.Reports.route),
     MoreItem("مركز البيانات", Icons.Filled.Storage, Destination.DataCenter.route),
     MoreItem("المساعد الذكي", Icons.Filled.SmartToy, Destination.AiAssistant.route),
     MoreItem("الإعدادات", Icons.Filled.SettingsSuggest, Destination.Settings.route)
@@ -46,7 +45,7 @@ private val moreItems = listOf(
 
 @Composable
 fun MoreScreen(navController: NavController) {
-    Scaffold(topBar = { TopAppBar(title = { Text("المزيد") }) }) { padding ->
+    Scaffold(topBar = { AppTopBar(title = "المزيد") }) { padding ->
         LazyColumn(
             modifier = Modifier.padding(padding).fillMaxSize(),
             contentPadding = PaddingValues(16.dp),

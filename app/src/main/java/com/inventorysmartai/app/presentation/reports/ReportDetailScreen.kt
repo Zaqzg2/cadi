@@ -81,7 +81,7 @@ private fun SingleStatusCallout(byStatus: Map<InventoryStatus, Int>, status: Inv
 
 /** A small hand-drawn bar chart over real local data — demo-scale, no chart library dependency. */
 @Composable
-private fun BarChartSection(title: String, series: List<Pair<Long, Double>>) {
+internal fun BarChartSection(title: String, series: List<Pair<Long, Double>>) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         if (series.isEmpty()) {

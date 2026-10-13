@@ -32,6 +32,8 @@ data class ManualEntryState(
     val unitId: Long? = null,
     val branchId: Long? = null,
     val hasExpiry: Boolean = false,
+    /** تاريخ انتهاء الرصيد الافتتاحي (يظهر عند تفعيل «له تاريخ صلاحية»). */
+    val expiryDate: Long? = null,
     val branches: List<Branch> = emptyList(),
     val categories: List<Category> = emptyList(),
     val units: List<UnitOfMeasure> = emptyList(),
@@ -122,6 +124,7 @@ class ManualEntryViewModel @Inject constructor(
     fun onUnit(id: Long?) = _state.update { it.copy(unitId = id) }
     fun onBranch(id: Long?) = _state.update { it.copy(branchId = id) }
     fun onHasExpiry(v: Boolean) = _state.update { it.copy(hasExpiry = v) }
+    fun onExpiry(v: Long?) = _state.update { it.copy(expiryDate = v) }
     fun consumeSaved() = _state.update { it.copy(savedProductId = null, editSaved = false) }
     fun consumeMessage() = _state.update { it.copy(message = null) }
 
@@ -192,13 +195,14 @@ class ManualEntryViewModel @Inject constructor(
                         defaultPrice = price
                     ),
                     branchId = s.branchId,
-                    openingQuantity = opening
+                    openingQuantity = opening,
+                    expiryDate = if (s.hasExpiry) s.expiryDate else null
                 )
                 if (addAnother) {
                     _state.update {
                         it.copy(
                             isSaving = false,
-                            name = "", itemNumber = "", barcode = "", price = "", openingQuantity = "",
+                            name = "", itemNumber = "", barcode = "", price = "", openingQuantity = "", expiryDate = null,
                             savedCount = it.savedCount + 1,
                             message = "تم حفظ «$name» — أدخل الصنف التالي",
                             resetTick = it.resetTick + 1

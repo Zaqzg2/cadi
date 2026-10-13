@@ -39,6 +39,8 @@ enum class ImportField(val labelAr: String, val isNumeric: Boolean = false) {
      *  for how rows sharing a product are grouped back into one Goal with N CommissionGroups. */
     TARGET_GROUP("مجموعة الهدف"),
     COMMISSION_VALUE("قيمة العمولة", isNumeric = true),
+    /** تاريخ الانتهاء: يُخزَّن كما كُتب ويُحوَّل عبر [DateParsing] عند الاعتماد. */
+    EXPIRY_DATE("تاريخ الانتهاء"),
     IGNORE("تجاهل هذا العمود");
 
     /** Declared here (a plain nested class of [ImportField]), NOT inside the `companion object`
@@ -136,6 +138,10 @@ enum class ImportField(val labelAr: String, val isNumeric: Boolean = false) {
             DictEntry(
                 COMMISSION_VALUE,
                 setOf("قيمة العمولة", "العمولة", "commission", "commission value")
+            ),
+            DictEntry(
+                EXPIRY_DATE,
+                setOf("تاريخ الانتهاء", "تاريخ انتهاء الصلاحية", "تاريخ الصلاحية", "انتهاء الصلاحية", "الصلاحية", "expiry date", "expiry", "expiration date", "exp date")
             ),
             // Bare, genuinely ambiguous terms — per spec these must NOT be silently folded into
             // CURRENT_STOCK/REQUESTED_QUANTITY/COUNTED_QUANTITY. Suggested as QUANTITY, flagged.

@@ -43,6 +43,7 @@ import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.CountStatus
 import com.inventorysmartai.app.domain.model.InventoryCount
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 @Composable
 fun CountingListScreen(navController: NavController, viewModel: CountingListViewModel = hiltViewModel()) {
@@ -55,7 +56,7 @@ fun CountingListScreen(navController: NavController, viewModel: CountingListView
     LaunchedEffect(message) { message?.let { snackbarHost.showSnackbar(it); viewModel.onMessageShown() } }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("الجرد") }) },
+        topBar = { AppTopBar(title = "الجرد", onBack = { navController.popBackStack() }) },
         snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate(Destination.CountingDetail.createRoute()) }) {

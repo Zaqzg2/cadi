@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.inventorysmartai.app.domain.model.BranchStock
 
 data class ProductDetailData(
     val summary: ProductStockSummary,
@@ -48,6 +49,15 @@ class ProductDetailViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
     fun onMessageShown() { _message.value = null }
+
+    /** تعديل/مسح تاريخ انتهاء سطر رصيد واحد (فرع + دفعة). */
+    fun setExpiry(stock: BranchStock, date: Long?) {
+        viewModelScope.launch {
+            runCatching { productRepository.setStockExpiry(productId, stock.branchId, stock.batchNumber, date) }
+                .onSuccess { _message.value = "تم تحديث تاريخ الانتهاء" }
+                .onFailure { _message.value = "تعذّر الحفظ: ${it.message ?: it.javaClass.simpleName}" }
+        }
+    }
 
     /** Lines in counts / purchases / sales that use this product (0 = safe to delete outright). */
     suspend fun documentReferenceCount(): Int = runCatching { productRepository.documentReferenceCount(productId) }.getOrDefault(0)

@@ -43,6 +43,7 @@ import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.ImportSourceType
 import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 private data class ImportTile(val type: ImportSourceType, val label: String, val icon: ImageVector)
 
@@ -115,7 +116,7 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("مركز البيانات") }) },
+        topBar = { AppTopBar(title = "مركز البيانات", onBack = { navController.popBackStack() }) },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         LazyColumn(

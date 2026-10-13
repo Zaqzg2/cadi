@@ -9,6 +9,8 @@ package com.inventorysmartai.app.navigation
  */
 sealed class Destination(val route: String) {
     data object Home : Destination("home")
+    /** صفحة واحدة ببطاقات المخزون والجرد والشراء. */
+    data object Stock : Destination("stock")
 
     data object Inventory : Destination("inventory")
     data object ProductDetail : Destination("inventory/product/{productId}") {
@@ -100,7 +102,7 @@ sealed class Destination(val route: String) {
         /** Routes where the bottom bar is shown — every "MAIN NAVIGATION" section plus the
          *  More hub. Everything else is a secondary page navigated to normally, per spec. */
         val topLevelRoutes = setOf(
-            Home.route, Inventory.route, Goals.route, CountingList.route, PurchaseList.route,
+            Home.route, Stock.route, Inventory.route, Goals.route, CountingList.route, PurchaseList.route,
             SalesList.route, Reports.route, DataCenter.route, AiAssistant.route, Settings.route, More.route
         )
     }

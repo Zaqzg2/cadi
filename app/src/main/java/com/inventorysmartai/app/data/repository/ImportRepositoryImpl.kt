@@ -56,6 +56,7 @@ import kotlinx.coroutines.flow.map
 import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.inventorysmartai.app.domain.importing.DateParsing
 
 /**
  * Phase 1/2's bookkeeping-only [createJob]/[finalizeJob] are kept exactly as they were (still
@@ -266,6 +267,10 @@ class ImportRepositoryImpl @Inject constructor(
             val newQuantity = fields[ImportField.CURRENT_STOCK.name]?.toDoubleOrNull()
                 ?: error("قيمة \"${ImportField.CURRENT_STOCK.labelAr}\" مفقودة أو غير صالحة لأحد الصفوف")
 
+            val newExpiry = fields[ImportField.EXPIRY_DATE.name]?.let { DateParsing.parseToMillis(it) }
+            if (newExpiry != null) {
+                productDao.getById(productId)?.takeIf { !it.hasExpiry }?.let { productDao.update(it.copy(hasExpiry = true)) }
+            }
             val existing = inventoryDao.getForProductAndBranch(productId, branchId)
             val delta = newQuantity - (existing?.quantity ?: 0.0)
             inventoryDao.upsert(
@@ -275,7 +280,7 @@ class ImportRepositoryImpl @Inject constructor(
                     branchId = branchId,
                     quantity = newQuantity,
                     batchNumber = null,
-                    expiryDate = existing?.expiryDate,
+                    expiryDate = newExpiry ?: existing?.expiryDate,
                     createdAt = existing?.createdAt ?: now,
                     updatedAt = now
                 )

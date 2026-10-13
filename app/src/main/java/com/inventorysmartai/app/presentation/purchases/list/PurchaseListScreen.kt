@@ -42,6 +42,7 @@ import com.inventorysmartai.app.navigation.Destination
 import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.PurchaseRequest
 import com.inventorysmartai.app.domain.model.PurchaseStatus
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 @Composable
 fun PurchaseListScreen(navController: NavController, viewModel: PurchaseListViewModel = hiltViewModel()) {
@@ -54,7 +55,7 @@ fun PurchaseListScreen(navController: NavController, viewModel: PurchaseListView
     LaunchedEffect(message) { message?.let { snackbarHost.showSnackbar(it); viewModel.onMessageShown() } }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("المشتريات") }) },
+        topBar = { AppTopBar(title = "المشتريات", onBack = { navController.popBackStack() }) },
         snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate(Destination.PurchaseDetail.createRoute()) }) {

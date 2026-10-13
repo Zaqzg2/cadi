@@ -30,12 +30,25 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.StateContent
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
+import androidx.compose.material3.Surface
+import com.inventorysmartai.app.presentation.common.SelectField
+import com.inventorysmartai.app.presentation.common.PickerItem
 
 @Composable
 fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("الأهداف والعمولات") }) }) { padding ->
+    Scaffold(
+        topBar = { AppTopBar(title = "الأهداف والعمولات", onBack = { navController.popBackStack() }) },
+        bottomBar = {
+            Surface(tonalElevation = 3.dp) {
+                Button(onClick = viewModel::onSave, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Text("حفظ الهدف")
+                }
+            }
+        }
+    ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             StateContent(
                 state = uiState,
@@ -48,18 +61,13 @@ fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltVi
             ) { data ->
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     item {
-                        Text("الصنف", style = MaterialTheme.typography.titleSmall)
-                    }
-                    item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(data.products) { product ->
-                                FilterChip(
-                                    selected = data.selectedProductId == product.id,
-                                    onClick = { viewModel.onProductSelected(product.id) },
-                                    label = { Text(product.name) }
-                                )
-                            }
-                        }
+                        SelectField(
+                            label = "الصنف",
+                            items = data.products.map { PickerItem(it.id, it.name) },
+                            selectedId = data.selectedProductId,
+                            onSelected = { id -> if (id != null) viewModel.onProductSelected(id) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
 
                     items(data.groups, key = { it.localId }) { row ->
@@ -91,11 +99,6 @@ fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltVi
                         }
                     }
 
-                    item {
-                        Button(onClick = viewModel::onSave, modifier = Modifier.fillMaxWidth()) {
-                            Text("حفظ الهدف")
-                        }
-                    }
 
                     if (data.isSaved) {
                         item { Snackbar { Text("تم حفظ الهدف بنجاح") } }

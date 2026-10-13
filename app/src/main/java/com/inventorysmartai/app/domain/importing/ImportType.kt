@@ -41,7 +41,7 @@ enum class ImportType(val labelAr: String) {
                 ImportField.CATEGORY, ImportField.UNIT, ImportField.MIN_STOCK,
                 ImportField.REORDER_POINT, ImportField.NOTES
             )
-            INVENTORY -> setOf(ImportField.BRANCH, ImportField.NOTES)
+            INVENTORY -> setOf(ImportField.BRANCH, ImportField.EXPIRY_DATE, ImportField.NOTES)
             COUNTING -> setOf(ImportField.BRANCH, ImportField.CURRENT_STOCK, ImportField.NOTES)
             PURCHASE_REQUESTS -> setOf(ImportField.BRANCH, ImportField.CURRENT_STOCK, ImportField.NOTES)
             GOALS -> setOf(ImportField.NOTES, ImportField.TARGET_GROUP, ImportField.COMMISSION_VALUE)

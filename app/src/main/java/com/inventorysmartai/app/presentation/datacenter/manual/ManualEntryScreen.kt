@@ -39,6 +39,7 @@ import com.inventorysmartai.app.navigation.Destination
 import com.inventorysmartai.app.presentation.common.PickerItem
 import com.inventorysmartai.app.presentation.common.ScanField
 import com.inventorysmartai.app.presentation.common.SelectField
+import com.inventorysmartai.app.presentation.common.DateField
 
 /**
  * Create a product, or (when opened with a productId) edit one.
@@ -129,6 +130,9 @@ fun ManualEntryScreen(navController: NavController, viewModel: ManualEntryViewMo
                 Text("له تاريخ صلاحية", style = MaterialTheme.typography.bodyLarge)
                 Switch(checked = state.hasExpiry, onCheckedChange = viewModel::onHasExpiry)
             }
+            if (state.hasExpiry && !state.isEdit) {
+                DateField(label = "تاريخ الانتهاء (للرصيد الافتتاحي)", value = state.expiryDate, onChange = viewModel::onExpiry, modifier = Modifier.fillMaxWidth())
+            }
 
             if (!state.isEdit) {
                 Text("رصيد افتتاحي (اختياري)", style = MaterialTheme.typography.titleSmall)
@@ -142,7 +146,7 @@ fun ManualEntryScreen(navController: NavController, viewModel: ManualEntryViewMo
                 NumberField("الكمية", state.openingQuantity, viewModel::onOpeningQuantity, Modifier.fillMaxWidth())
             } else {
                 Text(
-                    "تعديل الكميات يتم من الجرد أو من حركات المخزون، حتى لا تتغير الأرصدة بالخطأ.",
+                    "تعديل الكميات يتم من الجرد أو من حركات المخزون، حتى لا تتغير الأرصدة بالخطأ. ولتعديل تاريخ الانتهاء افتح تفاصيل الصنف ← أرصدة الفروع.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

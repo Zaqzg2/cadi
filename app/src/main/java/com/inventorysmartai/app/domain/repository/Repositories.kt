@@ -27,7 +27,11 @@ interface ProductRepository {
     /** Manual entry: inserts a NEW product and, when [branchId] is set and [openingQuantity] > 0, its
      *  opening stock row plus a MANUAL movement. Callers must check barcode/item-number duplicates
      *  first — [upsert] uses REPLACE on unique indexes, so a duplicate would overwrite another product. */
-    suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double): Long
+    suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double, expiryDate: Long? = null): Long
+
+    /** Sets (or clears, with null) the expiry date of ONE stock line (product + branch + batch). A date also
+     *  marks the product as expiry-tracked, otherwise the near-expiry / expired status would ignore it. */
+    suspend fun setStockExpiry(productId: Long, branchId: Long, batchNumber: String?, expiryDate: Long?)
 
     /** Edits an EXISTING product in place (UPDATE, never REPLACE — REPLACE deletes the row first and the
      *  cascade would wipe its stock and movements). Throws [IllegalArgumentException] when the product

@@ -58,6 +58,12 @@ class DefaultImportValidator @Inject constructor() : ImportValidator {
             }
         }
 
+        row.rawValue(ImportField.EXPIRY_DATE)?.let { raw ->
+            if (DateParsing.parseToMillis(raw) == null) {
+                errors += RowIssue(ImportErrorCode.INVALID_NUMBER, "تاريخ غير صالح في \"${ImportField.EXPIRY_DATE.labelAr}\": \"$raw\" — اكتبه مثل 2026-12-31", ImportField.EXPIRY_DATE)
+            }
+        }
+
         return ValidationResult(
             isValid = errors.isEmpty(),
             errors = errors,

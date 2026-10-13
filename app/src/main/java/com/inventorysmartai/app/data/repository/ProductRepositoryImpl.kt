@@ -146,12 +146,12 @@ class ProductRepositoryImpl @Inject constructor(
 
     // One transaction: the product, its opening stock row and its movement are saved together or not at all
     // (a failure between the steps used to leave a product with no stock/movement, or stock with no history).
-    override suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double): Long = database.withTransaction {
+    override suspend fun createWithOpeningStock(product: Product, branchId: Long?, openingQuantity: Double, expiryDate: Long?): Long = database.withTransaction {
         val productId = upsert(product.copy(id = 0L))
         if (branchId != null && openingQuantity > 0.0) {
             val now = System.currentTimeMillis()
             inventoryDao.upsert(
-                InventoryEntity(productId = productId, branchId = branchId, quantity = openingQuantity, createdAt = now, updatedAt = now)
+                InventoryEntity(productId = productId, branchId = branchId, quantity = openingQuantity, expiryDate = expiryDate, createdAt = now, updatedAt = now)
             )
             inventoryMovementDao.insert(
                 InventoryMovementEntity(
@@ -165,6 +165,16 @@ class ProductRepositoryImpl @Inject constructor(
             )
         }
         productId
+    }
+
+    override suspend fun setStockExpiry(productId: Long, branchId: Long, batchNumber: String?, expiryDate: Long?) {
+        database.withTransaction {
+            val row = inventoryDao.findByNaturalKey(productId, branchId, batchNumber) ?: return@withTransaction
+            inventoryDao.upsert(row.copy(expiryDate = expiryDate, updatedAt = System.currentTimeMillis()))
+            if (expiryDate != null) {
+                productDao.getById(productId)?.takeIf { !it.hasExpiry }?.let { productDao.update(it.copy(hasExpiry = true)) }
+            }
+        }
     }
 
     override suspend fun updateProduct(product: Product) {

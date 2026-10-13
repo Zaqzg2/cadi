@@ -48,6 +48,8 @@ import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.StatusChip
 import com.inventorysmartai.app.domain.model.InventoryMovement
 import com.inventorysmartai.app.domain.model.MovementType
+import com.inventorysmartai.app.domain.model.BranchStock
+import com.inventorysmartai.app.presentation.common.ExpiryPickerDialog
 
 private val detailTabs = listOf("الأساسية", "المخزون بالفروع", "الحركات", "الجرد", "المشتريات", "المبيعات", "المرفقات")
 
@@ -112,7 +114,7 @@ fun ProductDetailScreen(navController: NavController, viewModel: ProductDetailVi
                 }
                 when (selectedTab) {
                     0 -> BasicInfoTab(data)
-                    1 -> BranchStockTab(data)
+                    1 -> BranchStockTab(data, onSetExpiry = viewModel::setExpiry)
                     2 -> MovementsTab(data.movements, "لا توجد حركات مسجلة بعد")
                     3 -> MovementsTab(data.countMovements, "لا توجد تسويات جرد مرتبطة بهذا الصنف بعد")
                     4 -> MovementsTab(data.purchaseMovements, "لا توجد مشتريات مرتبطة بهذا الصنف بعد")
@@ -182,25 +184,36 @@ private fun BasicInfoTab(data: ProductDetailData) {
 }
 
 @Composable
-private fun BranchStockTab(data: ProductDetailData) {
+private fun BranchStockTab(data: ProductDetailData, onSetExpiry: (BranchStock, Long?) -> Unit) {
+    var editing by remember { mutableStateOf<BranchStock?>(null) }
+    editing?.let { stock ->
+        ExpiryPickerDialog(
+            initial = stock.expiryDate,
+            onConfirm = { onSetExpiry(stock, it); editing = null },
+            onDismiss = { editing = null }
+        )
+    }
     if (data.summary.branchStocks.isEmpty()) {
         EmptyTabMessage("لا يوجد رصيد مسجل في أي فرع بعد")
         return
     }
     LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(data.summary.branchStocks) { stock ->
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(modifier = Modifier.fillMaxWidth(), onClick = { editing = stock }) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(stock.branchName, style = MaterialTheme.typography.bodyLarge)
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(Formatters.formatNumber(stock.quantity), style = MaterialTheme.typography.titleMedium)
-                        stock.expiryDate?.let {
-                            Text("ينتهي: ${Formatters.formatDate(it)}", style = MaterialTheme.typography.labelSmall)
-                        }
+                    Column {
+                        Text(stock.branchName, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stock.expiryDate?.let { "ينتهي: ${Formatters.formatDate(it)}" } ?: "اضغط لإضافة تاريخ الانتهاء",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
+                    Text(Formatters.formatNumber(stock.quantity), style = MaterialTheme.typography.titleMedium)
                 }
             }
         }

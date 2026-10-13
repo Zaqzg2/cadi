@@ -43,6 +43,7 @@ import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.InvoiceStatus
 import com.inventorysmartai.app.domain.model.SalesInvoice
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 @Composable
 fun SalesListScreen(navController: NavController, viewModel: SalesListViewModel = hiltViewModel()) {
@@ -55,7 +56,7 @@ fun SalesListScreen(navController: NavController, viewModel: SalesListViewModel 
     LaunchedEffect(message) { message?.let { snackbarHost.showSnackbar(it); viewModel.onMessageShown() } }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("المبيعات") }) },
+        topBar = { AppTopBar(title = "المبيعات") },
         snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate(Destination.SalesDetail.createRoute()) }) {

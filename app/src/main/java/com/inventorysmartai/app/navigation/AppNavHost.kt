@@ -46,6 +46,9 @@ import com.inventorysmartai.app.presentation.settings.PlaceholderScreen
 import com.inventorysmartai.app.presentation.settings.SettingsScreen
 import com.inventorysmartai.app.presentation.settings.catalog.CatalogListScreen
 import com.inventorysmartai.app.presentation.settings.inventorysettings.InventorySettingsScreen
+import com.inventorysmartai.app.presentation.stock.StockHubScreen
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 
 @Composable
 fun AppNavHost() {
@@ -60,9 +63,25 @@ fun AppNavHost() {
         NavHost(
             navController = navController,
             startDestination = Destination.Home.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding).then(
+                // سحب أفقي على مساحة فارغة = الانتقال للتبويب المجاور. الجداول والبطاقات القابلة للسحب
+                // تستهلك الإيماءة أولًا فلا يحدث تعارض.
+                if (currentRoute in mainTabRoutes) Modifier.pointerInput(currentRoute) {
+                    var total = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { total = 0f },
+                        onDragEnd = {
+                            val i = mainTabRoutes.indexOf(currentRoute)
+                            val target = when { total > 160f -> i + 1; total < -160f -> i - 1; else -> i }
+                            if (target != i && target in mainTabRoutes.indices) navigateToTab(navController, mainTabRoutes[target])
+                        },
+                        onHorizontalDrag = { _, dx -> total += dx }
+                    )
+                } else Modifier
+            )
         ) {
             composable(Destination.Home.route) { HomeScreen(navController) }
+            composable(Destination.Stock.route) { StockHubScreen(navController) }
 
             composable(Destination.Inventory.route) { InventoryScreen(navController) }
             composable(

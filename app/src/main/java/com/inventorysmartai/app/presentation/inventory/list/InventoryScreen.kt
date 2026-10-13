@@ -60,6 +60,7 @@ import com.inventorysmartai.app.navigation.Destination
 import com.inventorysmartai.app.presentation.common.startBarcodeScan
 import com.inventorysmartai.app.presentation.inventory.components.InventoryFilterSheet
 import com.inventorysmartai.app.presentation.inventory.components.ProductCard
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 private val tabs = listOf(
     InventoryStatusFilter.ALL to "الكل",
@@ -102,8 +103,9 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text(if (data?.showArchived == true) "الأصناف المؤرشفة" else "المخزون") },
+            AppTopBar(
+                title = if (data?.showArchived == true) "الأصناف المؤرشفة" else "المخزون",
+                onBack = { navController.popBackStack() },
                 actions = {
                     IconButton(onClick = {
                         startBarcodeScan(
@@ -148,7 +150,7 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             StateContent(state = uiState, onRetry = {}) { d ->
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                         SearchField(value = d.filters.searchQuery, onValueChange = viewModel::onSearchQueryChange)
                         if (showAdvancedSearch) {
                             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

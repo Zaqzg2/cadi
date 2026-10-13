@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.domain.model.ThemeMode
 import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 private data class SettingsRow(val label: String, val route: String)
 
@@ -49,7 +50,7 @@ private val placeholderRows = listOf(
 fun SettingsScreen(navController: NavController, viewModel: SettingsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("الإعدادات") }) }) { padding ->
+    Scaffold(topBar = { AppTopBar(title = "الإعدادات", onBack = { navController.popBackStack() }) }) { padding ->
         LazyColumn(
             modifier = Modifier.padding(padding).fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
