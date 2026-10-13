@@ -44,6 +44,8 @@ import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.CountStatus
 import com.inventorysmartai.app.domain.model.InventoryCount
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
+import com.inventorysmartai.app.core.designsystem.component.LongPressCard
+import com.inventorysmartai.app.core.designsystem.component.CardAction
 
 @Composable
 fun CountingListScreen(navController: NavController, viewModel: CountingListViewModel = hiltViewModel()) {
@@ -83,7 +85,13 @@ fun CountingListScreen(navController: NavController, viewModel: CountingListView
                     items(list, key = { it.id }) { item ->
                         // swipe: delete (drafts only — the ViewModel explains why otherwise), tap: open
                         SwipeActionRow(onDelete = { if (viewModel.canDelete(item)) pendingDelete = item else viewModel.delete(item) }) {
-                            Card(modifier = Modifier.fillMaxWidth(), onClick = { navController.navigate(Destination.CountingDetail.createRoute(item.id)) }) {
+                            LongPressCard(
+                                onClick = { navController.navigate(Destination.CountingDetail.createRoute(item.id)) },
+                                actions = listOf(
+                                    CardAction("فتح") { navController.navigate(Destination.CountingDetail.createRoute(item.id)) },
+                                    CardAction("حذف") { if (viewModel.canDelete(item)) pendingDelete = item else viewModel.delete(item) }
+                                )
+                            ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(14.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,

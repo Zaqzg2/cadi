@@ -141,6 +141,11 @@ fun CountingDetailScreen(navController: NavController, viewModel: CountingDetail
                             }
                         ),
                         TableColumn(
+                            title = "الانتهاء", width = 110.dp,
+                            text = { r -> (if (r.expiryEdited) r.expiryDate else viewModel.expiryOf(r.productId))?.let { Formatters.formatDate(it) }.orEmpty() },
+                            onEdit = if (d.readOnly) null else { row, text -> viewModel.onExpiryChange(row.productId, text) }
+                        ),
+                        TableColumn(
                             title = "ملاحظة", width = 140.dp,
                             text = { it.notes },
                             onEdit = if (d.readOnly) null else { row, text -> viewModel.onItemNotesChange(row.productId, text) }

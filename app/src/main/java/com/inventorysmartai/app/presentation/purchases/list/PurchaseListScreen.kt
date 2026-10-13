@@ -43,6 +43,8 @@ import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.PurchaseRequest
 import com.inventorysmartai.app.domain.model.PurchaseStatus
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
+import com.inventorysmartai.app.core.designsystem.component.LongPressCard
+import com.inventorysmartai.app.core.designsystem.component.CardAction
 
 @Composable
 fun PurchaseListScreen(navController: NavController, viewModel: PurchaseListViewModel = hiltViewModel()) {
@@ -82,7 +84,13 @@ fun PurchaseListScreen(navController: NavController, viewModel: PurchaseListView
                     items(list, key = { it.id }) { item ->
                         // swipe: delete (drafts only — the ViewModel explains why otherwise), tap: open
                         SwipeActionRow(onDelete = { if (viewModel.canDelete(item)) pendingDelete = item else viewModel.delete(item) }) {
-                            Card(modifier = Modifier.fillMaxWidth(), onClick = { navController.navigate(Destination.PurchaseDetail.createRoute(item.id)) }) {
+                            LongPressCard(
+                                onClick = { navController.navigate(Destination.PurchaseDetail.createRoute(item.id)) },
+                                actions = listOf(
+                                    CardAction("فتح") { navController.navigate(Destination.PurchaseDetail.createRoute(item.id)) },
+                                    CardAction("حذف") { if (viewModel.canDelete(item)) pendingDelete = item else viewModel.delete(item) }
+                                )
+                            ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(14.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,

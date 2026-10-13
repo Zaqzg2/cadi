@@ -46,6 +46,8 @@ import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDi
 import com.inventorysmartai.app.core.designsystem.component.SearchField
 import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
+import com.inventorysmartai.app.core.designsystem.component.LongPressCard
+import com.inventorysmartai.app.core.designsystem.component.CardAction
 
 /** Customers / suppliers: search, add, edit (tap or swipe right), delete (swipe left, with confirmation),
  *  and archive/restore for parties that already have documents. */
@@ -113,7 +115,13 @@ fun PartyListScreen(navController: NavController, viewModel: PartyListViewModel 
                             onDelete = { pendingDelete = item },
                             onEdit = if (archived) null else ({ editing = item.id to viewModel.formFor(item.id) })
                         ) {
-                            Card(modifier = Modifier.fillMaxWidth(), onClick = { if (!archived) editing = item.id to viewModel.formFor(item.id) }) {
+                            LongPressCard(
+                                onClick = { if (!archived) editing = item.id to viewModel.formFor(item.id) },
+                                actions = listOfNotNull(
+                                    if (archived) null else CardAction("تعديل") { editing = item.id to viewModel.formFor(item.id) },
+                                    CardAction("حذف") { pendingDelete = item }
+                                )
+                            ) {
                                 Row(modifier = Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(item.name, style = MaterialTheme.typography.bodyLarge)

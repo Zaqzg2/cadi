@@ -15,12 +15,14 @@ import androidx.compose.ui.unit.dp
 import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.StatusChip
 import com.inventorysmartai.app.domain.model.ProductStockSummary
+import com.inventorysmartai.app.core.designsystem.component.LongPressCard
+import com.inventorysmartai.app.core.designsystem.component.CardAction
 
 /** رقم الصنف / الباركود / اسم الصنف / التصنيف / الوحدة / الكمية / الحد الأدنى / نقطة إعادة
  *  الطلب / الحالة — every field the spec asked for on the inventory card. */
 @Composable
-fun ProductCard(summary: ProductStockSummary, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Card(modifier = modifier.fillMaxWidth(), onClick = onClick) {
+fun ProductCard(summary: ProductStockSummary, onClick: () -> Unit, modifier: Modifier = Modifier, actions: List<CardAction> = emptyList()) {
+    LongPressCard(onClick = onClick, actions = actions, modifier = modifier) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(summary.product.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))

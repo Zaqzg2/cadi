@@ -52,6 +52,7 @@ import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.theme.LocalInventoryStatusColors
 import com.inventorysmartai.app.domain.model.InventoryStatus
 import com.inventorysmartai.app.domain.model.ProductStockSummary
+import com.inventorysmartai.app.domain.model.CountStatus
 
 private val reportTiles = listOf(
     ReportType.INVENTORY to "المخزون",
@@ -61,7 +62,9 @@ private val reportTiles = listOf(
     ReportType.EXPIRED to "منتهي",
     ReportType.BRANCHES to "الفروع",
     ReportType.SALES to "المبيعات",
-    ReportType.PURCHASES to "المشتريات"
+    ReportType.PURCHASES to "المشتريات",
+    ReportType.COUNTING to "الجرد",
+    ReportType.GOALS to "الأهداف"
 )
 
 private class ReportTable(val title: String, val headers: List<String>, val rows: List<List<String>>)
@@ -225,8 +228,32 @@ private fun buildTable(type: ReportType, d: ReportsData): ReportTable? {
                 listOf(name, Formatters.formatInt(list.size), Formatters.formatNumber(list.sumOf { it.quantity }))
             }
         )
-        else -> null
+        ReportType.COUNTING -> ReportTable(
+            title, listOf("#", "التاريخ", "الفرع", "الحالة", "الأصناف", "بها فرق"),
+            d.counts.mapIndexed { i, c ->
+                listOf(
+                    (i + 1).toString(), Formatters.formatDate(c.countDate), c.branchName ?: "—", countStatusLabel(c.status),
+                    Formatters.formatInt(c.items.size), Formatters.formatInt(c.items.count { it.difference != 0.0 })
+                )
+            }
+        )
+        ReportType.GOALS -> ReportTable(
+            title, listOf("الصنف", "الهدف الإجمالي", "المجموعات", "الفترة"),
+            d.goals.map { g ->
+                listOf(
+                    g.productName ?: "—", Formatters.formatNumber(g.groups.sumOf { it.targetQuantity }), Formatters.formatInt(g.groups.size),
+                    "${Formatters.formatDate(g.periodStart)} – ${Formatters.formatDate(g.periodEnd)}"
+                )
+            }
+        )
     }
+}
+
+private fun countStatusLabel(s: CountStatus) = when (s) {
+    CountStatus.DRAFT -> "مسودة"
+    CountStatus.IN_PROGRESS -> "جارٍ"
+    CountStatus.COMPLETED -> "مكتمل"
+    CountStatus.CANCELLED -> "ملغى"
 }
 
 // يُحتفظ بالمرجع حتى ينتهي إنشاء مستند الطباعة (وإلا قد يجمعه Garbage Collector قبل الطباعة).

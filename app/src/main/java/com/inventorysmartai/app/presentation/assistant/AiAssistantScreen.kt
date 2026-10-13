@@ -136,7 +136,7 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
     }
 
     Scaffold(
-        topBar = { AppTopBar(title = "المساعد الذكي") },
+        topBar = { AppTopBar(title = "المساعد الذكي", onBack = { navController.popBackStack() }) },
         snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {

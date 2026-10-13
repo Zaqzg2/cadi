@@ -148,6 +148,9 @@ class PurchaseRepositoryImpl @Inject constructor(
 
         lines.forEach { line ->
             if (line.quantity <= 0.0) return@forEach
+            if (line.expiryDate != null) {
+                productDao.getById(line.productId)?.takeIf { !it.hasExpiry }?.let { productDao.update(it.copy(hasExpiry = true)) }
+            }
             val existingStock = inventoryDao.findByNaturalKey(line.productId, branchId, line.batchNumber)
             inventoryDao.upsert(
                 InventoryEntity(

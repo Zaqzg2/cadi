@@ -21,13 +21,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.inventorysmartai.app.domain.importing.DateParsing
+import com.inventorysmartai.app.domain.model.ProductStockSummary
 
 data class CountItemRow(
     val productId: Long,
     val productName: String,
     val systemQuantity: Double,
     val actualQuantity: String,
-    val notes: String = ""
+    val notes: String = "",
+    /** تاريخ انتهاء رصيد الصنف في فرع الجرد — يُعدَّل من الجدول ويُحفظ فورًا في الرصيد. */
+    val expiryDate: Long? = null,
+    val expiryEdited: Boolean = false
 ) {
     val difference: Double? get() = actualQuantity.toDecimalOrNull()?.let { it - systemQuantity }
 }
@@ -65,6 +70,7 @@ class CountingDetailViewModel @Inject constructor(
     private val products = MutableStateFlow<List<Product>>(emptyList())
     /** productId -> (branchId -> quantity) */
     private var stock: Map<Long, Map<Long, Double>> = emptyMap()
+    private var summaryCache: List<ProductStockSummary> = emptyList()
     private val branchId = MutableStateFlow<Long?>(null)
     private val countDate = MutableStateFlow(System.currentTimeMillis())
     private val status = MutableStateFlow(CountStatus.DRAFT)
@@ -84,6 +90,7 @@ class CountingDetailViewModel @Inject constructor(
             branches.value = catalogRepository.observeBranches().first().filter { it.isActive }
             val summaries = productRepository.observeProductsWithStock().first()
             products.value = summaries.map { it.product }
+            summaryCache = summaries
             stock = summaries.associate { s -> s.product.id to s.branchStocks.groupBy { it.branchId }.mapValues { (_, v) -> v.sumOf { it.quantity } } }
             if (!isNew) {
                 countingRepository.observeCount(countId).first()?.let { applyExisting(it) }
@@ -132,6 +139,32 @@ class CountingDetailViewModel @Inject constructor(
             row.copy(systemQuantity = newSystem, actualQuantity = if (untouched) plain(newSystem) else row.actualQuantity)
         }
         publish()
+    }
+
+    /** أقرب تاريخ انتهاء مسجّل لرصيد الصنف في فرع الجرد الحالي. */
+    fun expiryOf(productId: Long): Long? {
+        val b = branchId.value ?: return null
+        return summaryCache.firstOrNull { it.product.id == productId }?.branchStocks.orEmpty()
+            .filter { it.branchId == b }.mapNotNull { it.expiryDate }.minOrNull()
+    }
+
+    fun onExpiryChange(productId: Long, text: String) {
+        if (readOnly()) return
+        val b = branchId.value ?: run { errorMessage.value = "اختر الفرع"; publish(); return }
+        val clean = text.trim()
+        val date = if (clean.isEmpty()) null else (DateParsing.parseToMillis(clean) ?: run {
+            errorMessage.value = "تاريخ غير صالح — اكتبه مثل 2026-12-31"; publish(); return
+        })
+        val lines = summaryCache.firstOrNull { it.product.id == productId }?.branchStocks.orEmpty().filter { it.branchId == b }
+        if (lines.isEmpty()) { message.value = "لا يوجد رصيد لهذا الصنف في الفرع — سجّل التاريخ بعد وجود رصيد"; publish(); return }
+        viewModelScope.launch {
+            runCatching { lines.forEach { productRepository.setStockExpiry(productId, b, it.batchNumber, date) } }
+                .onSuccess {
+                    items.value = items.value.map { r -> if (r.productId == productId) r.copy(expiryDate = date, expiryEdited = true) else r }
+                    publish()
+                }
+                .onFailure { errorMessage.value = "تعذّر حفظ التاريخ: ${it.message ?: it.javaClass.simpleName}"; publish() }
+        }
     }
 
     private fun readOnly() = status.value == CountStatus.COMPLETED || status.value == CountStatus.CANCELLED

@@ -244,10 +244,10 @@ class PurchaseDetailViewModel @Inject constructor(
      * deliveries. Stock moves inside PurchaseRepository.receive(); only the STATUS is updated afterwards
      * (never re-saving the lines — that used to reset the received quantities to zero).
      */
-    fun onReceive(quantities: Map<Long, Double>) {
+    fun onReceive(quantities: Map<Long, Double>, expiries: Map<Long, Long?> = emptyMap()) {
         if (isNew || locked()) return
         val branch = branchId.value ?: return
-        val lines = quantities.filterValues { it > 0.0 }.map { (productId, qty) -> PurchaseReceiptLine(productId = productId, quantity = qty) }
+        val lines = quantities.filterValues { it > 0.0 }.map { (productId, qty) -> PurchaseReceiptLine(productId = productId, quantity = qty, expiryDate = expiries[productId]) }
         if (lines.isEmpty()) { message.value = "أدخل كمية مستلمة واحدة على الأقل"; publish(); return }
         viewModelScope.launch {
             try {

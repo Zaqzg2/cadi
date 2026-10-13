@@ -39,12 +39,13 @@ import com.inventorysmartai.app.domain.model.AlertSeverity
 import com.inventorysmartai.app.domain.model.DashboardAlert
 import com.inventorysmartai.app.domain.model.DashboardSummary
 import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 @Composable
 fun HomeScreen(navController: NavController, viewModel: HomeViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Scaffold { padding ->
+    Scaffold(topBar = { AppTopBar(title = "الرئيسية") }) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             StateContent(state = uiState, onRetry = viewModel::load) { summary ->
                 HomeContent(summary = summary, navController = navController)
@@ -59,13 +60,9 @@ private fun HomeContent(summary: DashboardSummary, navController: NavController)
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            Text("مرحباً بك", style = MaterialTheme.typography.headlineMedium)
-        }
-
         item {
             AiAssistantEntryCard(onClick = { navController.navigate(Destination.AiAssistant.route) })
         }

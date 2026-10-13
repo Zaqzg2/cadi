@@ -55,6 +55,7 @@ import com.inventorysmartai.app.presentation.common.SelectField
 import com.inventorysmartai.app.presentation.common.SnackbarEffect
 import com.inventorysmartai.app.presentation.common.toPickerGroups
 import com.inventorysmartai.app.presentation.common.toPickerItems
+import com.inventorysmartai.app.presentation.common.DateField
 
 @Composable
 fun PurchaseDetailScreen(navController: NavController, viewModel: PurchaseDetailViewModel = hiltViewModel()) {
@@ -184,7 +185,7 @@ fun PurchaseDetailScreen(navController: NavController, viewModel: PurchaseDetail
                 if (showReceive) {
                     ReceiveDialog(
                         rows = d.items.filter { it.remaining > 0.0 },
-                        onConfirm = { q -> showReceive = false; viewModel.onReceive(q) },
+                        onConfirm = { q, e -> showReceive = false; viewModel.onReceive(q, e) },
                         onDismiss = { showReceive = false }
                     )
                 }
@@ -222,7 +223,8 @@ fun PurchaseDetailScreen(navController: NavController, viewModel: PurchaseDetail
 /** One field per line, pre-filled with what is still outstanding: accept as-is for a full delivery, or
  *  type less for a partial one (blank / 0 = nothing received for that line). */
 @Composable
-private fun ReceiveDialog(rows: List<PurchaseItemRow>, onConfirm: (Map<Long, Double>) -> Unit, onDismiss: () -> Unit) {
+private fun ReceiveDialog(rows: List<PurchaseItemRow>, onConfirm: (Map<Long, Double>, Map<Long, Long?>) -> Unit, onDismiss: () -> Unit) {
+    val expiry = remember(rows) { mutableStateMapOf<Long, Long?>() }
     val entered = remember(rows) {
         mutableStateMapOf<Long, String>().apply {
             rows.forEach { put(it.productId, if (it.remaining % 1.0 == 0.0) it.remaining.toLong().toString() else it.remaining.toString()) }
@@ -243,12 +245,18 @@ private fun ReceiveDialog(rows: List<PurchaseItemRow>, onConfirm: (Map<Long, Dou
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
+                    DateField(
+                        label = "تاريخ الانتهاء (اختياري)",
+                        value = expiry[row.productId],
+                        onChange = { expiry[row.productId] = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onConfirm(entered.mapNotNull { (id, text) -> (if (text.isBlank()) 0.0 else text.toDecimalOrNull())?.takeIf { it >= 0.0 }?.let { id to it } }.toMap())
+                onConfirm(entered.mapNotNull { (id, text) -> (if (text.isBlank()) 0.0 else text.toDecimalOrNull())?.takeIf { it >= 0.0 }?.let { id to it } }.toMap(), expiry.toMap())
             }) { Text("تأكيد الاستلام") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } }

@@ -61,6 +61,7 @@ import com.inventorysmartai.app.presentation.common.startBarcodeScan
 import com.inventorysmartai.app.presentation.inventory.components.InventoryFilterSheet
 import com.inventorysmartai.app.presentation.inventory.components.ProductCard
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
+import com.inventorysmartai.app.core.designsystem.component.CardAction
 
 private val tabs = listOf(
     InventoryStatusFilter.ALL to "الكل",
@@ -226,7 +227,12 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
                                 ) {
                                     ProductCard(
                                         summary = summary,
-                                        onClick = { navController.navigate(Destination.ProductDetail.createRoute(summary.product.id)) }
+                                        onClick = { navController.navigate(Destination.ProductDetail.createRoute(summary.product.id)) },
+                                        actions = listOf(
+                                            CardAction("فتح") { navController.navigate(Destination.ProductDetail.createRoute(summary.product.id)) },
+                                            CardAction("تعديل") { navController.navigate(Destination.ManualEntry.createRoute(productId = summary.product.id)) },
+                                            CardAction("حذف") { pendingDelete = setOf(summary.product.id) }
+                                        )
                                     )
                                 }
                             }
@@ -338,7 +344,8 @@ private fun InventoryTable(
             TableColumn(
                 title = "أقرب انتهاء", width = 110.dp,
                 text = { it.nearestExpiryDate?.let(Formatters::formatDate).orEmpty() },
-                comparator = compareBy { it.nearestExpiryDate ?: Long.MAX_VALUE }
+                comparator = compareBy { it.nearestExpiryDate ?: Long.MAX_VALUE },
+                onEdit = { row, text -> viewModel.editExpiry(row, text) }
             )
         )
     }

@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.inventorysmartai.app.domain.importing.DateParsing
 
 data class InventoryFilters(
     val searchQuery: String = "",
@@ -221,6 +222,24 @@ class InventoryViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { productRepository.updateProduct(updated) }
                 .onFailure { _message.value = it.message ?: "تعذّر حفظ التعديل" }
+        }
+    }
+
+    /** تعديل تاريخ الانتهاء من الجدول: يُطبَّق على أقرب تاريخ (أو على كل الأسطر إن لم يوجد تاريخ). فارغ = مسح. */
+    fun editExpiry(summary: ProductStockSummary, text: String) {
+        val clean = text.trim()
+        val date = if (clean.isEmpty()) null else (DateParsing.parseToMillis(clean) ?: run {
+            _message.value = "تاريخ غير صالح — اكتبه مثل 2026-12-31"
+            return
+        })
+        val targets = summary.branchStocks.filter { summary.nearestExpiryDate == null || it.expiryDate == summary.nearestExpiryDate }
+        if (targets.isEmpty()) { _message.value = "لا يوجد رصيد لهذا الصنف — أضف رصيدًا أولًا"; return }
+        viewModelScope.launch {
+            runCatching { targets.forEach { productRepository.setStockExpiry(summary.product.id, it.branchId, it.batchNumber, date) } }
+                .onSuccess {
+                    _message.value = if (summary.branchStocks.size > 1) "تم تحديث أقرب تاريخ انتهاء — لتعديل فرع محدد افتح تفاصيل الصنف" else "تم تحديث تاريخ الانتهاء"
+                }
+                .onFailure { _message.value = "تعذّر الحفظ: ${it.message ?: it.javaClass.simpleName}" }
         }
     }
 }

@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.inventorysmartai.app.core.common.UiState
 import com.inventorysmartai.app.domain.model.InventoryStatus
 import com.inventorysmartai.app.domain.model.ProductStockSummary
+import com.inventorysmartai.app.domain.model.Goal
+import com.inventorysmartai.app.domain.model.InventoryCount
+import com.inventorysmartai.app.domain.repository.CountingRepository
+import com.inventorysmartai.app.domain.repository.GoalRepository
 import com.inventorysmartai.app.domain.repository.ProductRepository
 import com.inventorysmartai.app.domain.repository.ReportsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,13 +28,17 @@ data class ReportsData(
     val inventoryByStatus: Map<InventoryStatus, Int>,
     val salesByDay: List<Pair<Long, Double>>,
     val purchasesByDay: List<Pair<Long, Double>>,
-    val products: List<ProductStockSummary> = emptyList()
+    val products: List<ProductStockSummary> = emptyList(),
+    val counts: List<InventoryCount> = emptyList(),
+    val goals: List<Goal> = emptyList()
 )
 
 @HiltViewModel
 class ReportsViewModel @Inject constructor(
     private val reportsRepository: ReportsRepository,
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
+    private val countingRepository: CountingRepository,
+    private val goalRepository: GoalRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<UiState<ReportsData>>(UiState.Loading)
@@ -39,11 +47,19 @@ class ReportsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             combine(
-                reportsRepository.observeInventoryByStatus(),
-                reportsRepository.observeSalesTotalsByDay(30),
-                reportsRepository.observePurchaseTotalsByDay(30),
-                productRepository.observeProductsWithStock()
-            ) { byStatus, sales, purchases, products -> ReportsData(byStatus, sales, purchases, products) }
+                combine(
+                    reportsRepository.observeInventoryByStatus(),
+                    reportsRepository.observeSalesTotalsByDay(30),
+                    reportsRepository.observePurchaseTotalsByDay(30)
+                ) { byStatus, sales, purchases -> Triple(byStatus, sales, purchases) },
+                combine(
+                    productRepository.observeProductsWithStock(),
+                    countingRepository.observeCounts(),
+                    goalRepository.observeGoals()
+                ) { products, counts, goals -> Triple(products, counts, goals) }
+            ) { (byStatus, sales, purchases), (products, counts, goals) ->
+                ReportsData(byStatus, sales, purchases, products, counts, goals)
+            }
                 .catch { e -> _uiState.value = UiState.Error(e.message ?: "تعذّر تحميل التقارير") }
                 .collect { _uiState.value = UiState.Success(it) }
         }
