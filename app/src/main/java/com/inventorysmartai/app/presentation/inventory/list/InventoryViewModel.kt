@@ -2,10 +2,12 @@
 
 package com.inventorysmartai.app.presentation.inventory.list
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.inventorysmartai.app.core.common.UiState
 import com.inventorysmartai.app.core.common.toDecimalOrNull
+import com.inventorysmartai.app.domain.inventory.InventoryListFilter
 import com.inventorysmartai.app.domain.model.Branch
 import com.inventorysmartai.app.domain.model.Category
 import com.inventorysmartai.app.domain.model.InventoryStatusFilter
@@ -14,6 +16,7 @@ import com.inventorysmartai.app.domain.model.ProductStockSummary
 import com.inventorysmartai.app.domain.model.SortOrder
 import com.inventorysmartai.app.domain.repository.CatalogRepository
 import com.inventorysmartai.app.domain.repository.ProductRepository
+import com.inventorysmartai.app.navigation.Destination
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,8 +38,50 @@ data class InventoryFilters(
     val selectedTab: InventoryStatusFilter = InventoryStatusFilter.ALL,
     val selectedBranchId: Long? = null,
     val selectedCategoryId: Long? = null,
-    val sortOrder: SortOrder = SortOrder.NAME_ASC
-)
+    val sortOrder: SortOrder = SortOrder.NAME_ASC,
+    /** Stock-quantity bounds (set by the assistant: "الأصناف التي رصيدها أقل من 10"); strict unless [inclusiveBounds]. */
+    val quantityBelow: Double? = null,
+    val quantityAbove: Double? = null,
+    val inclusiveBounds: Boolean = false
+) {
+    /** The same rules as a plain value, shared with the assistant's `showInventory` tool so both always agree on what matches. */
+    fun toListFilter(): InventoryListFilter = InventoryListFilter(
+        searchQuery = searchQuery,
+        itemNumberQuery = itemNumberQuery,
+        barcodeQuery = barcodeQuery,
+        status = selectedTab,
+        branchId = selectedBranchId,
+        categoryId = selectedCategoryId,
+        quantityBelow = quantityBelow,
+        quantityAbove = quantityAbove,
+        inclusiveBounds = inclusiveBounds,
+        sortOrder = sortOrder
+    )
+}
+
+/**
+ * The filters the screen starts with: none for the plain Inventory route, or whatever the assistant put in the route of
+ * [Destination.InventoryFiltered]. Unknown or malformed values are ignored, never fatal.
+ */
+internal fun initialInventoryFilters(handle: SavedStateHandle): InventoryFilters {
+    fun text(key: String): String? = handle.get<String>(key)?.takeIf { it.isNotBlank() }
+    val status = text(Destination.InventoryFiltered.ARG_STATUS)
+        ?.let { runCatching { InventoryStatusFilter.valueOf(it) }.getOrNull() }
+        ?: InventoryStatusFilter.ALL
+    val sort = text(Destination.InventoryFiltered.ARG_SORT)
+        ?.let { runCatching { SortOrder.valueOf(it) }.getOrNull() }
+        ?: SortOrder.NAME_ASC
+    return InventoryFilters(
+        searchQuery = text(Destination.InventoryFiltered.ARG_QUERY).orEmpty(),
+        selectedTab = status,
+        selectedBranchId = text(Destination.InventoryFiltered.ARG_BRANCH_ID)?.toLongOrNull(),
+        selectedCategoryId = text(Destination.InventoryFiltered.ARG_CATEGORY_ID)?.toLongOrNull(),
+        sortOrder = sort,
+        quantityBelow = text(Destination.InventoryFiltered.ARG_BELOW)?.toDoubleOrNull(),
+        quantityAbove = text(Destination.InventoryFiltered.ARG_ABOVE)?.toDoubleOrNull(),
+        inclusiveBounds = text(Destination.InventoryFiltered.ARG_INCLUSIVE) == "1"
+    )
+}
 
 enum class InventoryViewMode { TABLE, CARDS }
 
@@ -63,11 +108,12 @@ data class InventoryUiData(
 
 @HiltViewModel
 class InventoryViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val productRepository: ProductRepository,
     private val catalogRepository: CatalogRepository
 ) : ViewModel() {
 
-    private val filters = MutableStateFlow(InventoryFilters())
+    private val filters = MutableStateFlow(initialInventoryFilters(savedStateHandle))
     private val extras = MutableStateFlow(InventoryExtras())
 
     private val _uiState = MutableStateFlow<UiState<InventoryUiData>>(UiState.Loading)
@@ -116,34 +162,8 @@ class InventoryViewModel @Inject constructor(
         }
     }
 
-    private fun applyFilters(products: List<ProductStockSummary>, f: InventoryFilters): List<ProductStockSummary> {
-        var result = products
-        if (f.selectedTab != InventoryStatusFilter.ALL) {
-            result = result.filter { it.status.name == f.selectedTab.name }
-        }
-        if (f.searchQuery.isNotBlank()) {
-            result = result.filter { it.product.name.contains(f.searchQuery, ignoreCase = true) }
-        }
-        if (f.itemNumberQuery.isNotBlank()) {
-            result = result.filter { it.product.itemNumber?.contains(f.itemNumberQuery, ignoreCase = true) == true }
-        }
-        if (f.barcodeQuery.isNotBlank()) {
-            result = result.filter { it.product.barcode?.contains(f.barcodeQuery, ignoreCase = true) == true }
-        }
-        if (f.selectedBranchId != null) {
-            result = result.filter { summary -> summary.branchStocks.any { it.branchId == f.selectedBranchId } }
-        }
-        if (f.selectedCategoryId != null) {
-            result = result.filter { it.product.categoryId == f.selectedCategoryId }
-        }
-        result = when (f.sortOrder) {
-            SortOrder.NAME_ASC -> result.sortedBy { it.product.name }
-            SortOrder.NAME_DESC -> result.sortedByDescending { it.product.name }
-            SortOrder.QUANTITY_ASC -> result.sortedBy { it.totalQuantity }
-            SortOrder.QUANTITY_DESC -> result.sortedByDescending { it.totalQuantity }
-        }
-        return result
-    }
+    private fun applyFilters(products: List<ProductStockSummary>, f: InventoryFilters): List<ProductStockSummary> =
+        f.toListFilter().filterAndSort(products)
 
     // ---- filters ----
     fun onSearchQueryChange(value: String) = filters.update { it.copy(searchQuery = value) }
@@ -153,6 +173,7 @@ class InventoryViewModel @Inject constructor(
     fun onBranchSelected(branchId: Long?) = filters.update { it.copy(selectedBranchId = branchId) }
     fun onCategorySelected(categoryId: Long?) = filters.update { it.copy(selectedCategoryId = categoryId) }
     fun onSortOrderSelected(order: SortOrder) = filters.update { it.copy(sortOrder = order) }
+    fun onClearQuantityFilter() = filters.update { it.copy(quantityBelow = null, quantityAbove = null, inclusiveBounds = false) }
 
     // ---- view / selection ----
     fun toggleViewMode() = extras.update {

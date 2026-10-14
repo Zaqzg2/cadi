@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -56,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -92,6 +95,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 private val SUGGESTED_PROMPTS = listOf(
+    "افتح صفحة الأصناف",
+    "فلتر الأصناف التي رصيدها أقل من 10",
+    "ما الأصناف التي لم تحقق هدف الشهر؟",
+    "رتب الفروع حسب نسبة تحقيق الهدف",
+    "جهّز أمر شراء للنواقص",
     "ما الأصناف المنخفضة؟",
     "ما الأصناف التي مخزونها صفر؟",
     "ما الأصناف القريبة من الانتهاء؟",
@@ -123,6 +131,12 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
         }
     }
 
+    // While the chat is off screen (the assistant opened another screen for the person) its answers are shown over that screen.
+    DisposableEffect(viewModel) {
+        viewModel.onChatVisible(true)
+        onDispose { viewModel.onChatVisible(false) }
+    }
+
     if (state.pendingConfirmationTextAr != null) {
         ActionConfirmationDialog(
             actionDescriptionAr = state.pendingConfirmationTextAr.orEmpty(),
@@ -142,7 +156,7 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (state.messages.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.verticalScroll(rememberScrollState())) {
                         EmptyStateView(
                             title = "المساعد الذكي",
                             description = "اسأل عن المخزون، المبيعات، طلبات الشراء، أو الأهداف — يستخدم المساعد بيانات تطبيقك الفعلية للإجابة."
@@ -337,6 +351,7 @@ private fun quickPromptsFor(files: List<AttachmentInfo>): List<String> {
         }
         if (AttachmentKind.IMAGE in kinds || AttachmentKind.PDF in kinds) {
             add("اقرأ ما في الملف")
+            add("اقرأ فاتورة الشراء وطابق أصنافها مع الكتالوج")
             add("حوّل الجدول إلى ملف Excel")
             add("احسب العمولة من هذا الجدول: ")
         }

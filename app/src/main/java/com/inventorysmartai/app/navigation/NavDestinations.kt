@@ -1,5 +1,9 @@
 package com.inventorysmartai.app.navigation
 
+import com.inventorysmartai.app.domain.inventory.InventoryListFilter
+import com.inventorysmartai.app.domain.model.InventoryStatusFilter
+import com.inventorysmartai.app.domain.model.SortOrder
+
 /**
  * Every screen's route lives here as a sealed class rather than raw strings scattered through
  * the app. Optional numeric args (edit-or-create screens) use the classic "-1 means new" query
@@ -13,6 +17,43 @@ sealed class Destination(val route: String) {
     data object Stock : Destination("stock")
 
     data object Inventory : Destination("inventory")
+
+    /**
+     * The same inventory screen, opened by the assistant with filters already applied ("اعرض الأصناف التي رصيدها أقل من 10").
+     * The filters are optional query arguments of the route itself, so the screen's ViewModel reads them from its own
+     * SavedStateHandle when it is created — no shared state, no race. The plain [Inventory] route stays exactly as it was.
+     */
+    data object InventoryFiltered : Destination(
+        "inventory_view?status={status}&below={below}&above={above}&incl={incl}&q={q}&branchId={branchId}&categoryId={categoryId}&sort={sort}"
+    ) {
+        const val ARG_STATUS = "status"
+        const val ARG_BELOW = "below"
+        const val ARG_ABOVE = "above"
+        const val ARG_INCLUSIVE = "incl"
+        const val ARG_QUERY = "q"
+        const val ARG_BRANCH_ID = "branchId"
+        const val ARG_CATEGORY_ID = "categoryId"
+        const val ARG_SORT = "sort"
+
+        /** Only the filters that differ from "no filter" are written; every argument is optional. */
+        fun createRoute(filter: InventoryListFilter): String {
+            val parts = buildList<String> {
+                if (filter.status != InventoryStatusFilter.ALL) add("$ARG_STATUS=${filter.status.name}")
+                filter.quantityBelow?.let { add("$ARG_BELOW=${InventoryListFilter.plainNumber(it)}") }
+                filter.quantityAbove?.let { add("$ARG_ABOVE=${InventoryListFilter.plainNumber(it)}") }
+                if (filter.inclusiveBounds) add("$ARG_INCLUSIVE=1")
+                if (filter.searchQuery.isNotBlank()) add("$ARG_QUERY=${encodeArg(filter.searchQuery.trim())}")
+                filter.branchId?.let { add("$ARG_BRANCH_ID=$it") }
+                filter.categoryId?.let { add("$ARG_CATEGORY_ID=$it") }
+                if (filter.sortOrder != SortOrder.NAME_ASC) add("$ARG_SORT=${filter.sortOrder.name}")
+            }
+            return if (parts.isEmpty()) "inventory_view" else "inventory_view?" + parts.joinToString("&")
+        }
+
+        /** URLEncoder writes a space as "+", which navigation would not turn back into a space; "%20" it does. */
+        private fun encodeArg(value: String): String = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+    }
+
     data object ProductDetail : Destination("inventory/product/{productId}") {
         const val ARG_PRODUCT_ID = "productId"
         fun createRoute(productId: Long) = "inventory/product/$productId"
@@ -102,7 +143,7 @@ sealed class Destination(val route: String) {
         /** Routes where the bottom bar is shown — every "MAIN NAVIGATION" section plus the
          *  More hub. Everything else is a secondary page navigated to normally, per spec. */
         val topLevelRoutes = setOf(
-            Home.route, Stock.route, Inventory.route, Goals.route, CountingList.route, PurchaseList.route,
+            Home.route, Stock.route, Inventory.route, InventoryFiltered.route, Goals.route, CountingList.route, PurchaseList.route,
             SalesList.route, Reports.route, DataCenter.route, AiAssistant.route, Settings.route, More.route
         )
     }

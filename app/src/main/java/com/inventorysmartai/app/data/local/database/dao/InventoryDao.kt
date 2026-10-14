@@ -45,4 +45,9 @@ interface InventoryMovementDao {
 
     @Insert
     suspend fun insert(movement: InventoryMovementEntity): Long
+
+    /** Read-only: the movements of one type (a [com.inventorysmartai.app.domain.model.MovementType] name) inside a period — what the
+     *  assistant's inbound-vs-sales comparison adds up. */
+    @Query("SELECT * FROM inventory_movements WHERE movementType = :movementType AND createdAt BETWEEN :fromDate AND :toDate")
+    suspend fun getByTypeBetween(movementType: String, fromDate: Long, toDate: Long): List<InventoryMovementEntity>
 }

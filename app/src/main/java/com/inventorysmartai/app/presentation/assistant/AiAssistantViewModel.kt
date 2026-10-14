@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
+import com.inventorysmartai.app.domain.assistant.AssistantUiBridge
 import com.inventorysmartai.app.domain.assistant.AttachmentInfo
 import com.inventorysmartai.app.domain.assistant.ChatMessage
 import com.inventorysmartai.app.domain.assistant.ChatRole
@@ -41,10 +42,20 @@ data class AiAssistantUiState(
  */
 @HiltViewModel
 class AiAssistantViewModel @Inject constructor(
-    private val assistantRepository: AssistantRepository
+    private val assistantRepository: AssistantRepository,
+    private val uiBridge: AssistantUiBridge
 ) : ViewModel() {
 
     private val conversationId = UUID.randomUUID().toString()
+
+    /** True while the chat is on screen. When the assistant opens another screen for the person ("افتح صفحة الأصناف"), its
+     *  answer is shown over THAT screen instead (see AppNavHost), and "فتح المحادثة" there comes back to this same conversation. */
+    private var chatVisible = false
+
+    fun onChatVisible(visible: Boolean) {
+        chatVisible = visible
+        if (visible) uiBridge.clearNotice()
+    }
 
     private val _state = MutableStateFlow(AiAssistantUiState())
     val state: StateFlow<AiAssistantUiState> = _state.asStateFlow()
@@ -129,12 +140,15 @@ class AiAssistantViewModel @Inject constructor(
                     files = result.files
                 )
                 update { it.copy(messages = it.messages + assistantMessage, isSending = false, pendingConfirmationTextAr = null) }
+                if (!chatVisible) uiBridge.postNotice(assistantMessage.text)
             }
             is AssistantStepResult.ConfirmationRequired -> {
                 update { it.copy(isSending = false, pendingConfirmationTextAr = result.actionDescriptionAr) }
+                if (!chatVisible) uiBridge.postNotice("المساعد ينتظر موافقتك: ${result.actionDescriptionAr}")
             }
             is AssistantStepResult.Error -> {
                 update { it.copy(isSending = false, errorMessage = result.messageAr, pendingConfirmationTextAr = null) }
+                if (!chatVisible) uiBridge.postNotice(result.messageAr)
             }
         }
     }

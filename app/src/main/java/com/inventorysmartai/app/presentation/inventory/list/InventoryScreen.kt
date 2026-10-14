@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -180,6 +182,19 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
                                 selected = d.filters.selectedTab == tab,
                                 onClick = { viewModel.onTabSelected(tab) },
                                 text = { Text(label) }
+                            )
+                        }
+                    }
+
+                    // الفلتر الذي طبّقه المساعد (أو أي حدّ للرصيد): شريحة تُزال بلمسة.
+                    val quantityLabel = d.filters.toListFilter().quantityLabelAr()
+                    if (quantityLabel != null) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                            FilterChip(
+                                selected = true,
+                                onClick = viewModel::onClearQuantityFilter,
+                                label = { Text(quantityLabel) },
+                                trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "إزالة فلتر الرصيد") }
                             )
                         }
                     }

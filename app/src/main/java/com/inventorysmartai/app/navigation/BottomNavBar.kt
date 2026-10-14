@@ -18,7 +18,8 @@ private data class BottomNavItem(val route: String, val label: String, val icon:
 
 /** الأقسام الثلاثة التي تجمعها صفحة «المخزون»: تُظهر تبويب المخزون مفعّلًا. */
 private val stockGroup = setOf(
-    Destination.Stock.route, Destination.Inventory.route, Destination.CountingList.route, Destination.PurchaseList.route
+    Destination.Stock.route, Destination.Inventory.route, Destination.InventoryFiltered.route,
+    Destination.CountingList.route, Destination.PurchaseList.route
 )
 private val mainRoutes = stockGroup + setOf(Destination.Home.route, Destination.SalesList.route, Destination.Reports.route)
 

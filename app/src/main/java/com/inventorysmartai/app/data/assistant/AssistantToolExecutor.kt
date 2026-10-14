@@ -1,7 +1,11 @@
 package com.inventorysmartai.app.data.assistant
 
 import com.inventorysmartai.app.data.ai.provider.AiJson
+import com.inventorysmartai.app.data.assistant.control.AppControlToolExecutor
 import com.inventorysmartai.app.data.assistant.files.FileToolExecutor
+import com.inventorysmartai.app.data.assistant.smart.InsightToolExecutor
+import com.inventorysmartai.app.data.assistant.smart.ProductMatchingToolExecutor
+import com.inventorysmartai.app.data.assistant.smart.PurchasePlanningToolExecutor
 import com.inventorysmartai.app.data.remote.BackendFailure
 import com.inventorysmartai.app.domain.assistant.LocalToolExecutor
 import com.inventorysmartai.app.domain.repository.GoogleWorkspaceRepository
@@ -9,7 +13,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * What the assistant actually runs: [DefaultLocalToolExecutor] for everything that touches Room, plus the four Google
+ * What the assistant actually runs: [DefaultLocalToolExecutor] for everything that touches Room, [FileToolExecutor] for the
+ * attached-file tools, four more delegates for the app-control / report-analyst / purchase-planning / name-matching tools
+ * (see the `*_TOOL_NAMES` sets in [AssistantToolCatalog]), plus the four Google
  * Workspace tools, which are forwarded to the backend through [GoogleWorkspaceRepository] — the SAME calls the Reports
  * screen's buttons make. All four are write/send actions, so [requiresConfirmation] is true for each and the repository
  * loop asks the person (with the Arabic text from [describeForConfirmation]) before [execute] is ever called.
@@ -21,21 +27,32 @@ import javax.inject.Singleton
 class AssistantToolExecutor @Inject constructor(
     private val local: DefaultLocalToolExecutor,
     private val workspace: GoogleWorkspaceRepository,
-    private val files: FileToolExecutor
+    private val files: FileToolExecutor,
+    private val control: AppControlToolExecutor,
+    private val insights: InsightToolExecutor,
+    private val planning: PurchasePlanningToolExecutor,
+    private val matching: ProductMatchingToolExecutor
 ) : LocalToolExecutor {
 
     override fun requiresConfirmation(name: String): Boolean =
-        name in AssistantToolCatalog.WORKSPACE_TOOL_NAMES || local.requiresConfirmation(name)
+        name in AssistantToolCatalog.WORKSPACE_TOOL_NAMES ||
+            name in AssistantToolCatalog.SMART_WRITE_TOOL_NAMES ||
+            local.requiresConfirmation(name)
 
-    override suspend fun describeForConfirmation(name: String, argumentsJson: String): String =
-        if (name in AssistantToolCatalog.WORKSPACE_TOOL_NAMES) {
+    override suspend fun describeForConfirmation(name: String, argumentsJson: String): String = when {
+        name in AssistantToolCatalog.WORKSPACE_TOOL_NAMES ->
             WorkspaceToolSupport.describe(name, AiJson.parseObject(argumentsJson).orEmpty())
-        } else {
-            local.describeForConfirmation(name, argumentsJson)
-        }
+        name in AssistantToolCatalog.PLANNING_TOOL_NAMES -> planning.describeForConfirmation(name, argumentsJson)
+        name in AssistantToolCatalog.MATCHING_TOOL_NAMES -> matching.describeForConfirmation(name, argumentsJson)
+        else -> local.describeForConfirmation(name, argumentsJson)
+    }
 
     override suspend fun execute(name: String, argumentsJson: String): String {
         if (name in AssistantToolCatalog.FILE_TOOL_NAMES) return files.execute(name, argumentsJson)
+        if (name in AssistantToolCatalog.APP_CONTROL_TOOL_NAMES) return control.execute(name, argumentsJson)
+        if (name in AssistantToolCatalog.INSIGHT_TOOL_NAMES) return insights.execute(name, argumentsJson)
+        if (name in AssistantToolCatalog.PLANNING_TOOL_NAMES) return planning.execute(name, argumentsJson)
+        if (name in AssistantToolCatalog.MATCHING_TOOL_NAMES) return matching.execute(name, argumentsJson)
         if (name !in AssistantToolCatalog.WORKSPACE_TOOL_NAMES) return local.execute(name, argumentsJson)
         val args = AiJson.parseObject(argumentsJson).orEmpty()
         return when (name) {

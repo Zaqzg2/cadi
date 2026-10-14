@@ -1,5 +1,7 @@
 package com.inventorysmartai.app.data.assistant
 
+import com.inventorysmartai.app.navigation.AssistantScreen
+
 /**
  * Every tool the assistant can call, as OpenAI-format function definitions: the LOCAL tools (everything that reads or writes
  * Room — answered by [DefaultLocalToolExecutor]) plus the four Google Workspace tools (Drive, Docs, Calendar, Gmail), which
@@ -20,6 +22,24 @@ internal object AssistantToolCatalog {
      */
     val FILE_TOOL_NAMES: Set<String> =
         ATTACHMENT_TOOL_NAMES + setOf("calculate", "calculateTieredCommission", "createSpreadsheet", "buildDashboard")
+
+    /** "Control the app": they only navigate (open a screen, a filtered list, a record) and change no data, so no confirmation. */
+    val APP_CONTROL_TOOL_NAMES: Set<String> = setOf("openScreen", "showInventory", "openRecord")
+
+    /** The smart report analyst: read-only questions answered with exact numbers computed in the app. */
+    val INSIGHT_TOOL_NAMES: Set<String> = setOf("analyzeGoals", "compareFlows", "rankBranchesByGoals")
+
+    /** Purchase planning: suggestPurchaseOrder reads; draftPurchaseOrder WRITES a draft that the person reviews before it is sent. */
+    val PLANNING_TOOL_NAMES: Set<String> = setOf("suggestPurchaseOrder", "draftPurchaseOrder")
+
+    /** Name matching: matchProductNames reads and only suggests; addProductAlias writes one confirmed spelling. */
+    val MATCHING_TOOL_NAMES: Set<String> = setOf("matchProductNames", "addProductAlias")
+
+    /** Every tool of the four groups above (answered by their own executors, not by DefaultLocalToolExecutor). */
+    val SMART_TOOL_NAMES: Set<String> = APP_CONTROL_TOOL_NAMES + INSIGHT_TOOL_NAMES + PLANNING_TOOL_NAMES + MATCHING_TOOL_NAMES
+
+    /** The ones that change data: the app shows the person an explicit confirmation before running them. */
+    val SMART_WRITE_TOOL_NAMES: Set<String> = setOf("draftPurchaseOrder", "addProductAlias")
 
     private fun int(desc: String) = mapOf("type" to "integer", "description" to desc)
     private fun num(desc: String) = mapOf("type" to "number", "description" to desc)
@@ -286,8 +306,111 @@ internal object AssistantToolCatalog {
             ), listOf("title")))
     )
 
+    private val periodProperties: Map<String, Any?> = mapOf(
+        "month" to str("Calendar month as YYYY-MM, e.g. 2026-10. Default: the current month"),
+        "fromDate" to num("Alternative to month: period start, epoch millis"),
+        "toDate" to num("Alternative to month: period end, epoch millis")
+    )
+
+    /** The app-control, report-analyst, purchase-planning and name-matching tools. */
+    private val smartTools: List<Map<String, Any?>> = listOf(
+        // ---- control the app
+        tool("openScreen",
+            "Open one of the app's screens for the person (navigation only, changes no data). Use for «افتح صفحة الأصناف» / «انتقل إلى المشتريات» / «افتح التقارير». " +
+                "To open the item list WITH filters use showInventory instead. Screens: " +
+                AssistantScreen.entries.joinToString("; ") { "${it.name} = ${it.labelAr}" } + ".",
+            obj(mapOf("screen" to strEnum("Which screen to open", AssistantScreen.keys)), listOf("screen"))),
+        tool("showInventory",
+            "Open the item list (الأصناف) with filters already applied and report how many items match (changes no data). " +
+                "Use for «اعرض الأصناف منتهية الصلاحية» / «فلتر الأصناف التي رصيدها أقل من 10» / «اعرض الناقص في الفرع الأول». " +
+                "quantityBelow / quantityAbove bound the stock quantity strictly («أقل من 10» excludes 10) unless inclusive=true; with a branch the quantity is that branch's stock, otherwise the total. All filters are optional and combine.",
+            obj(mapOf(
+                "status" to strEnum("Stock status filter", listOf("ALL", "AVAILABLE", "LOW", "ZERO", "NEAR_EXPIRY", "EXPIRED")),
+                "quantityBelow" to num("Only items whose stock is LESS than this number"),
+                "quantityAbove" to num("Only items whose stock is MORE than this number"),
+                "inclusive" to bool("true = the quantity limits include the number itself (<= / >=)"),
+                "search" to str("Text to look for in the item name"),
+                "branch" to str("Branch NAME as the person said it (e.g. «الفرع الأول»); alternative to branchId"),
+                "branchId" to int("Branch id"),
+                "category" to str("Category NAME as the person said it; alternative to categoryId"),
+                "categoryId" to int("Category id"),
+                "sortBy" to strEnum("Order of the list", listOf("NAME_ASC", "NAME_DESC", "QUANTITY_ASC", "QUANTITY_DESC"))
+            ))),
+        tool("openRecord",
+            "Open one existing record's detail screen (changes no data): a product, a purchase request, a sales invoice or a stock count. " +
+                "Use it to show the person a draft you just created, or for «افتح الصنف X».",
+            obj(mapOf(
+                "type" to strEnum("Record type", listOf("PRODUCT", "PURCHASE_REQUEST", "SALES_INVOICE", "COUNT")),
+                "id" to int("The record id")
+            ), listOf("type", "id"))),
+        // ---- smart report analyst (read-only, exact numbers)
+        tool("analyzeGoals",
+            "Goal-achievement analysis with exact numbers: every goal whose period overlaps the month (default: the current month) with its target, what was sold, the remainder and the percent, worst first. " +
+                "Use for «ما الأصناف التي لم تحقق هدف الشهر؟». Never compute these yourself.",
+            obj(periodProperties + mapOf(
+                "onlyUnmet" to bool("true = list only the goals NOT yet met"),
+                "limit" to int("Max goals to return, default 20")
+            ))),
+        tool("compareFlows",
+            "Compare stock RECEIVED (purchases) against SALES and the goal targets for a period (default: the current month), per product or per branch. " +
+                "Use for «قارن الوارد بالمبيعات والأهداف». Exact sums — never add the numbers yourself.",
+            obj(periodProperties + mapOf(
+                "groupBy" to strEnum("PRODUCT (default) or BRANCH", listOf("PRODUCT", "BRANCH")),
+                "branchId" to int("Optional: only this branch (PRODUCT grouping)"),
+                "limit" to int("Max rows to return, default 20")
+            ))),
+        tool("rankBranchesByGoals",
+            "Rank the branches by their contribution to the goals of a period (default: the current month). Goals belong to the whole company, not to a branch, " +
+                "so a branch's percent = what it sold of the goal products ÷ the total target. Use for «رتب الفروع حسب نسبة تحقيق الهدف». Say this basis when you answer.",
+            obj(periodProperties)),
+        // ---- purchase order from shortages (the person reviews before it is sent)
+        tool("suggestPurchaseOrder",
+            "Find the products that are short (stock at or below their minimum / reorder point, or zero) and compute how much to order for each. Exact arithmetic — never work out quantities yourself. " +
+                "The result includes the rule used (state it to the person) and the branches and suppliers. Read-only; the next step is draftPurchaseOrder. Use for «جهّز أمر شراء للنواقص».",
+            obj(mapOf(
+                "targetFactor" to num("Order up to this multiple of the minimum level (default 2; range 1 to 10)"),
+                "categoryId" to int("Optional category filter"),
+                "limit" to int("Max lines to return, default 40")
+            ))),
+        tool("draftPurchaseOrder",
+            "Save a purchase request as a DRAFT and open it for the person to review and edit. You never send or approve it: the person presses «إرسال الطلب» on that screen. " +
+                "Use after suggestPurchaseOrder, with the final quantities the person agreed to. The app asks the person to confirm before saving. " +
+                "Prefer this over createPurchaseRequest for orders built from shortages.",
+            obj(mapOf(
+                "branchId" to int("Receiving branch id (optional when the company has a single branch)"),
+                "supplierId" to int("Optional supplier id"),
+                "notes" to str("Optional note"),
+                "items" to arr(
+                    "The lines of the order",
+                    obj(mapOf("productId" to int("Product id"), "quantity" to num("Quantity to order, greater than 0")), listOf("productId", "quantity"))
+                )
+            ), listOf("items"))),
+        // ---- name matching (suggestions only)
+        tool("matchProductNames",
+            "Match names written in different ways (spelling, word order, ml/مل, missing spaces, the lines of a photographed purchase invoice) to the catalog. " +
+                "Returns per name a confidence (EXACT, HIGH, MEDIUM, LOW, AMBIGUOUS, NONE), the best product and alternatives. These are SUGGESTIONS: " +
+                "show everything that is not EXACT to the person and let them choose — never assume. Read-only.",
+            obj(mapOf(
+                "items" to arr(
+                    "The names to match (up to 60)",
+                    obj(mapOf(
+                        "name" to str("The name exactly as written"),
+                        "quantity" to num("Optional quantity, echoed back in the result"),
+                        "unitPrice" to num("Optional unit price, echoed back in the result")
+                    ), listOf("name"))
+                )
+            ), listOf("items"))),
+        tool("addProductAlias",
+            "Save a spelling the person has just CONFIRMED as an alternate name of a product, so it is recognised automatically next time. " +
+                "Only after the person confirmed the match. The app asks for confirmation before saving.",
+            obj(mapOf(
+                "productId" to int("The product id"),
+                "alias" to str("The alternate name exactly as it was written")
+            ), listOf("productId", "alias")))
+    )
+
     /** Everything the assistant can call. Tests and the tool-name checks use this complete list. */
-    val tools: List<Map<String, Any?>> = dataTools + fileTools
+    val tools: List<Map<String, Any?>> = dataTools + smartTools + fileTools
 
     /** The tools to offer for one request: the file-reading ones only make sense once something is attached, so they are left out
      *  until then to keep the request small (free tiers have small tokens-per-minute budgets). */
@@ -307,5 +430,9 @@ internal object AssistantToolCatalog {
         الحسابات: لا تجمع ولا تحسب بنفسك أبدًا. للتجميع والتصفية على جدول مرفق استخدم queryTable، ولأي عملية حسابية استخدم calculate، ولأهداف وعمولات بمستويات (الفئة الأولى/الثانية/الثالثة) استخدم calculateTieredCommission — وإن كانت الفئات في صورة فاقرأها أولًا ثم مرّر المستويات للأداة، وافترض أن العمولة هي عمولة أعلى مستوى تحقق ما لم يقل المستخدم غير ذلك، واذكر هذا الافتراض.
         تعبئة النماذج: اقرأ نموذج Excel المرفق أولًا (readAttachment) لتحديد مكان كل خلية، ثم استدعِ fillForm بقائمة {cell, value}. الخلية المدمجة تُكتب في أول خلية فيها، ولا تُكتب فوق الصيغ. إن أعادت الأداة skipped أو redirected فاذكرها للمستخدم بصدق ولا تدّعِ أن كل شيء عُبّئ.
         الملفات الناتجة: لإنشاء ملف Excel جديد استخدم createSpreadsheet، ولتحويل بيانات إلى لوحة بيانات (داشبورد) استخدم buildDashboard — ويمكنك تمرير source بدل نسخ الأرقام. يظهر الملف الناتج للمستخدم تلقائيًا تحت ردّك مع زرّي فتح ومشاركة، فاذكر ما أنشأته باختصار ولا تلصق محتواه ولا تذكر مسارات.
+        التحكم بالتطبيق: openScreen لفتح شاشة، وshowInventory لعرض الأصناف بشرط (الفرع والتصنيف بالاسم كما قاله المستخدم)؛ ولا تحتاجان تأكيدًا. بعد التنفيذ قل بجملة ماذا فتحت وكم صنفًا ظهر. «أقل من 10» تعني أقل من 10 فعلًا.
+        التقارير: لأسئلة الأهداف والوارد والمبيعات وترتيب الفروع استخدم analyzeGoals وcompareFlows وrankBranchesByGoals؛ الأرقام جاهزة فلا تحسب بنفسك، واذكر أساس الحساب (basis) — فالأهداف للشركة كلها لا لكل فرع.
+        أمر الشراء من النواقص: suggestPurchaseOrder، ثم اعرض الأصناف والقاعدة المستخدمة وعدّل الكميات بطلب المستخدم، ثم draftPurchaseOrder (مسودة تُفتح للمراجعة). لا تقل أبدًا إنك أرسلت الطلب أو اعتمدته؛ الإرسال زرّ المستخدم. لا تستخدم createPurchaseRequest لذلك إلا بطلب صريح لإرسال فوري.
+        فاتورة شراء مصورة: اقرأها بـ readAttachment ورتّب المورد والتاريخ والرقم والبنود (الاسم والكمية والسعر) كما وردت دون تخمين، ثم matchProductNames لأسماء البنود؛ ما ليس EXACT يختاره المستخدم ولا تعتمده بنفسك، وبعد تأكيده addProductAlias. نبّه إلى أخطاء القراءة الضوئية في الأرقام.
     """.trimIndent()
 }
