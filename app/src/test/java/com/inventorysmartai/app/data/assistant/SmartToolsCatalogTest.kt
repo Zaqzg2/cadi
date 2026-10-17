@@ -81,7 +81,7 @@ class SmartToolsCatalogTest {
     @Test
     fun `showInventory exposes the quantity and status filters`() {
         val properties = propertiesOf("showInventory").keys
-        assertTrue(properties.containsAll(setOf("status", "quantityBelow", "quantityAbove", "inclusive", "search", "branch", "branchId", "category", "categoryId", "sortBy")))
+        assertTrue(properties.containsAll(setOf("status", "quantityBelow", "quantityAbove", "inclusive", "search", "branch", "branchId", "category", "categoryId", "sortBy", "open")))
         assertTrue(requiredOf("showInventory").isEmpty())
     }
 

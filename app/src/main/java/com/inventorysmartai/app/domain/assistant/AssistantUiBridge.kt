@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,8 +38,18 @@ class AssistantUiBridge @Inject constructor() {
     /** Commands in the order they were posted; each is delivered to exactly one collector (the app shell). */
     val commands: Flow<UiCommand> = commandChannel.receiveAsFlow()
 
+    private val queued = AtomicInteger(0)
+
+    /** How many commands were queued so far. The chat compares it before and after a turn to know whether the assistant moved the person
+     *  to another screen — and so whether its answer must be shown over that screen. */
+    val queuedCount: Int get() = queued.get()
+
     /** Returns false only when the buffer is full (the shell stopped collecting) — the tool then tells the model it could not open the screen. */
-    fun post(command: UiCommand): Boolean = commandChannel.trySend(command).isSuccess
+    fun post(command: UiCommand): Boolean {
+        val accepted = commandChannel.trySend(command).isSuccess
+        if (accepted) queued.incrementAndGet()
+        return accepted
+    }
 
     /** A finished assistant answer shown over whatever screen the person is on, because the assistant opened that screen for them. */
     data class Notice(val id: Long, val text: String)

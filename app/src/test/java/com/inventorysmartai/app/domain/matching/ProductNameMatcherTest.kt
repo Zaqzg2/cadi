@@ -118,12 +118,12 @@ class ProductNameMatcherTest {
         val exact = matcher.match("ارضيات فلاش")
         assertEquals(MatchConfidence.EXACT, exact.confidence)
         assertEquals(3L, exact.best!!.productId)
-        assertNotNull(exact.best!!.matchedOn)
+        assertNotNull(exact.best.matchedOn)
 
         val reordered = matcher.match("فلاش ارضيات")
         assertEquals(MatchConfidence.HIGH, reordered.confidence)
         assertEquals(3L, reordered.best!!.productId)
-        assertEquals("أرضيات فلاش", reordered.best!!.matchedOn)
+        assertEquals("أرضيات فلاش", reordered.best.matchedOn)
     }
 
     @Test

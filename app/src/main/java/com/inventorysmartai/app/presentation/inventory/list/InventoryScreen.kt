@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.inventory.list
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
@@ -31,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,8 +44,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +61,8 @@ import com.inventorysmartai.app.core.designsystem.component.SelectionBar
 import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
 import com.inventorysmartai.app.core.designsystem.component.TableColumn
+import com.inventorysmartai.app.core.designsystem.theme.LocalInventoryStatusColors
+import com.inventorysmartai.app.domain.assistant.OfflineReplyText
 import com.inventorysmartai.app.domain.model.InventoryStatus
 import com.inventorysmartai.app.domain.model.InventoryStatusFilter
 import com.inventorysmartai.app.domain.model.ProductStockSummary
@@ -185,6 +193,14 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
                             )
                         }
                     }
+
+                    // The design's three summary tiles; a tap filters the list by that status.
+                    SummaryTiles(
+                        total = d.totalCount,
+                        counts = d.statusCounts,
+                        selected = d.filters.selectedTab,
+                        onSelect = viewModel::onTabSelected
+                    )
 
                     // الفلتر الذي طبّقه المساعد (أو أي حدّ للرصيد): شريحة تُزال بلمسة.
                     val quantityLabel = d.filters.toListFilter().quantityLabelAr()
@@ -375,4 +391,43 @@ private fun InventoryTable(
         onRowClick = { navController.navigate(Destination.ProductDetail.createRoute(it.product.id)) },
         onDelete = { onDelete(it.product.id) }
     )
+}
+
+/** Total / expired / low — the three tiles at the top of the design. Each one is a button: it applies that status filter. */
+@Composable
+private fun SummaryTiles(total: Int, counts: Map<String, Int>, selected: InventoryStatusFilter, onSelect: (InventoryStatusFilter) -> Unit) {
+    val status = LocalInventoryStatusColors.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+    ) {
+        SummaryTile("إجمالي الأصناف", total, MaterialTheme.colorScheme.primary, selected == InventoryStatusFilter.ALL, Modifier.weight(1f)) {
+            onSelect(InventoryStatusFilter.ALL)
+        }
+        SummaryTile("منتهية الصلاحية", counts["EXPIRED"] ?: 0, status.nearExpiry, selected == InventoryStatusFilter.EXPIRED, Modifier.weight(1f)) {
+            onSelect(InventoryStatusFilter.EXPIRED)
+        }
+        SummaryTile("منخفض", counts["LOW"] ?: 0, status.low, selected == InventoryStatusFilter.LOW, Modifier.weight(1f)) {
+            onSelect(InventoryStatusFilter.LOW)
+        }
+    }
+}
+
+@Composable
+private fun SummaryTile(label: String, count: Int, color: Color, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = color.copy(alpha = if (selected) 0.22f else 0.12f),
+        border = if (selected) BorderStroke(1.5.dp, color) else null
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 10.dp)
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
+            Text(OfflineReplyText.items(count), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = color, maxLines = 1)
+        }
+    }
 }

@@ -17,7 +17,9 @@ data class ChatMessage(
     /** Files the person attached to this message (user messages only) — shown as small chips under the bubble. */
     val attachments: List<AttachmentInfo> = emptyList(),
     /** Files the assistant created while answering (assistant messages only) — shown as cards with open/share buttons. */
-    val files: List<GeneratedFile> = emptyList()
+    val files: List<GeneratedFile> = emptyList(),
+    /** The tables, progress bars and proposals that go with an assistant answer (assistant messages only) — drawn as interactive cards. */
+    val cards: List<AssistantCard> = emptyList()
 )
 
 enum class ChatRole { USER, ASSISTANT }
@@ -51,7 +53,12 @@ data class GeneratedFile(
 /** What the app should do next after a turn — either show the final text, or block on an
  *  explicit confirmation before a write/send action runs (spec: "ACTION CONFIRMATION"). */
 sealed class AssistantStepResult {
-    data class Final(val text: String, val usedLocalData: Boolean, val files: List<GeneratedFile> = emptyList()) : AssistantStepResult()
+    data class Final(
+        val text: String,
+        val usedLocalData: Boolean,
+        val files: List<GeneratedFile> = emptyList(),
+        val cards: List<AssistantCard> = emptyList()
+    ) : AssistantStepResult()
     data class ConfirmationRequired(
         val callId: String,
         val toolName: String,

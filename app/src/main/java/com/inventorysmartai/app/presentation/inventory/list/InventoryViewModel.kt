@@ -103,7 +103,9 @@ data class InventoryUiData(
     val filters: InventoryFilters,
     val viewMode: InventoryViewMode,
     val showArchived: Boolean,
-    val selectedIds: Set<Long>
+    val selectedIds: Set<Long>,
+    /** How many products are in each stock status (by `InventoryStatus` name) before any filter — the summary tiles at the top. */
+    val statusCounts: Map<String, Int> = emptyMap()
 )
 
 @HiltViewModel
@@ -153,7 +155,8 @@ class InventoryViewModel @Inject constructor(
                         filters = currentFilters,
                         viewMode = currentExtras.viewMode,
                         showArchived = currentExtras.showArchived,
-                        selectedIds = selection
+                        selectedIds = selection,
+                        statusCounts = products.groupingBy { it.status.name }.eachCount()
                     )
                 ) as UiState<InventoryUiData>
             }

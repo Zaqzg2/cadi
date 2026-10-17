@@ -6,10 +6,15 @@ import com.inventorysmartai.app.data.ai.provider.AiToolCall
 import com.inventorysmartai.app.data.ai.provider.OpenAiMessageSanitizer
 import com.inventorysmartai.app.data.ai.provider.toProviderFailure
 import com.inventorysmartai.app.data.assistant.files.AttachmentStore
+import com.inventorysmartai.app.data.assistant.offline.OfflineAssistant
 import com.inventorysmartai.app.data.backend.AiChatGateway
+import com.inventorysmartai.app.data.remote.BackendFailure
+import com.inventorysmartai.app.domain.assistant.AssistantCard
+import com.inventorysmartai.app.domain.assistant.AssistantCardBuilder
 import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
 import com.inventorysmartai.app.domain.assistant.AttachmentInfo
+import com.inventorysmartai.app.domain.assistant.CardAction
 import com.inventorysmartai.app.domain.assistant.LocalToolExecutor
 import com.inventorysmartai.app.domain.assistant.ToolExecutionSite
 import com.inventorysmartai.app.domain.repository.AssistantRepository
@@ -34,12 +39,18 @@ import kotlin.coroutines.cancellation.CancellationException
  * Files: the person can attach spreadsheets, Word files, photos and PDFs. They live in [attachments]; the model is told they
  * exist (a short note after the question) and reads them through the file tools. Files the assistant creates while answering
  * (a filled form, a dashboard) are collected there and handed back with the final answer.
+ *
+ * Local first: before any model call, [offline] gets the message. A command it recognises («افتح صفحة الأصناف», «ما الأصناف التي لم تحقق
+ * هدف الشهر؟»...) is answered on the phone with cards — no network, no tokens. Only a message it does not recognise goes to the model,
+ * and if there is no connection (or no key) the person gets the list of commands that DO work instead of a bare error. The cards for
+ * the model path come from the same builder: the results of the smart tools are turned into cards and handed back with the answer.
  */
 @Singleton
 class AssistantRepositoryImpl @Inject constructor(
     private val gateway: AiChatGateway,
     private val localToolExecutor: LocalToolExecutor,
-    private val attachments: AttachmentStore
+    private val attachments: AttachmentStore,
+    private val offline: OfflineAssistant
 ) : AssistantRepository {
 
     /** One assistant message's tool calls, resolved one by one; OpenAI-format requires a reply for every id. */
@@ -58,6 +69,9 @@ class AssistantRepositoryImpl @Inject constructor(
 
     private val histories = ConcurrentHashMap<String, MutableList<Map<String, Any?>>>()
     private val pending = ConcurrentHashMap<String, PendingTurn>()
+
+    /** The cards built from the smart tools' results during the current model turn, handed back with its final answer. */
+    private val turnCards = ConcurrentHashMap<String, MutableList<AssistantCard>>()
     private val lock = Mutex()
 
     override suspend fun sendMessage(
@@ -77,6 +91,13 @@ class AssistantRepositoryImpl @Inject constructor(
     override suspend fun confirmPendingAction(conversationId: String, approved: Boolean): AssistantStepResult =
         lock.withLock { confirmInternal(conversationId, approved) }
 
+    override suspend fun performCardAction(conversationId: String, action: CardAction): AssistantStepResult =
+        lock.withLock {
+            // an open model confirmation is declined first, exactly as a new typed message would do
+            histories[conversationId]?.let { abandonPending(conversationId, it) }
+            offline.requestAction(conversationId, action)
+        }
+
     // ---- send ----
 
     private suspend fun sendInternal(
@@ -90,9 +111,20 @@ class AssistantRepositoryImpl @Inject constructor(
             mutableListOf(mapOf("role" to "system", "content" to AssistantToolCatalog.systemPrompt))
         }
         abandonPending(conversationId, history)
+        offline.clearPending(conversationId) // a new message also cancels a local action that was waiting for its dialog
+        turnCards.remove(conversationId)
         // A failed earlier turn can leave the history ending on a tool result; Mistral rejects a user message right after one.
         if (history.last()["role"] == "tool") {
             history += mapOf("role" to "assistant", "content" to "تعذّر إكمال الرد السابق.")
+        }
+
+        // Local first: a command the app understands is carried out here, with no network and no model.
+        if (attachmentIds.isEmpty()) {
+            val local = offline.tryHandle(conversationId, message)
+            if (local != null) {
+                recordLocalExchange(history, message, local)
+                return local
+            }
         }
 
         val mark = history.size
@@ -110,8 +142,27 @@ class AssistantRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             rollback(history, mark)
             attachments.takeTurnOutputs()
-            AssistantStepResult.Error(e.toProviderFailure().messageAr)
+            turnCards.remove(conversationId)
+            val failure = e.toProviderFailure()
+            if (needsConnection(failure)) {
+                // No internet (or no key): not a dead end — say what still works without one.
+                offline.offlineHelp("هذا الطلب يحتاج النموذج الذكي، وهو يتطلب اتصالًا بالإنترنت (أو مفتاحًا في إعدادات الذكاء الاصطناعي). هذه الأوامر تعمل بدونه:")
+            } else {
+                AssistantStepResult.Error(failure.messageAr)
+            }
         }
+    }
+
+    /** True when the model could not be reached at all — no connection, a timeout, or no key set — as opposed to a model that answered badly. */
+    private fun needsConnection(failure: BackendFailure): Boolean =
+        failure is BackendFailure.NetworkUnavailable ||
+            (failure is BackendFailure.Structured && failure.code in OFFLINE_FALLBACK_CODES)
+
+    /** Keeps what was said locally in the conversation too, so a later question to the model still has the context. */
+    private fun recordLocalExchange(history: MutableList<Map<String, Any?>>, message: String, result: AssistantStepResult) {
+        history += mapOf("role" to "user", "content" to message)
+        val said = if (result is AssistantStepResult.Final) result.text else "بانتظار تأكيد المستخدم."
+        history += mapOf("role" to "assistant", "content" to said)
     }
 
     /** A new message while a confirmation was still open: treat the open write as declined so the history stays valid. */
@@ -120,7 +171,7 @@ class AssistantRepositoryImpl @Inject constructor(
         turn.awaiting?.let { turn.results[it.id] = DECLINED_RESULT_JSON }
         for (call in turn.calls) {
             if (call.id in turn.results) continue
-            turn.results[call.id] = if (localToolExecutor.requiresConfirmation(call.name)) DECLINED_RESULT_JSON else runTool(call)
+            turn.results[call.id] = if (localToolExecutor.requiresConfirmation(call.name)) DECLINED_RESULT_JSON else runTool(conversationId, call)
         }
         appendToolResults(history, turn)
     }
@@ -132,6 +183,7 @@ class AssistantRepositoryImpl @Inject constructor(
     // ---- confirm ----
 
     private suspend fun confirmInternal(conversationId: String, approved: Boolean): AssistantStepResult {
+        if (offline.hasPending(conversationId)) return offline.confirm(conversationId, approved)
         val turn = pending[conversationId]
         val call = turn?.awaiting
         val history = histories[conversationId]
@@ -140,7 +192,7 @@ class AssistantRepositoryImpl @Inject constructor(
         }
         attachments.resumeTurn(conversationId)
         return try {
-            turn.results[call.id] = if (approved) runTool(call).also { turn.usedLocalData = true } else DECLINED_RESULT_JSON
+            turn.results[call.id] = if (approved) runTool(conversationId, call).also { turn.usedLocalData = true } else DECLINED_RESULT_JSON
             turn.awaiting = null
             when (val step = advance(conversationId, history, turn)) {
                 is Step.NeedsConfirmation -> step.result
@@ -167,7 +219,7 @@ class AssistantRepositoryImpl @Inject constructor(
                 val text = reply.text.orEmpty()
                 history += mapOf("role" to "assistant", "content" to text)
                 shrinkBulkyFileResults(history)
-                return AssistantStepResult.Final(text, usedLocal, attachments.takeTurnOutputs())
+                return AssistantStepResult.Final(text, usedLocal, attachments.takeTurnOutputs(), takeCards(conversationId))
             }
 
             history += mapOf(
@@ -203,7 +255,7 @@ class AssistantRepositoryImpl @Inject constructor(
                     AssistantStepResult.ConfirmationRequired(call.id, call.name, siteOf(call.name), description)
                 )
             }
-            turn.results[call.id] = runTool(call)
+            turn.results[call.id] = runTool(conversationId, call)
             turn.usedLocalData = true
         }
         pending.remove(conversationId)
@@ -222,8 +274,9 @@ class AssistantRepositoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun runTool(call: AiToolCall): String = try {
+    private suspend fun runTool(conversationId: String, call: AiToolCall): String = try {
         val result = localToolExecutor.execute(call.name, call.argumentsJson)
+        collectCards(conversationId, call.name, result) // from the whole result, before it is cut down for the model
         // Free tiers have small per-minute token budgets; an oversized table is cut rather than rejected (413/429).
         if (result.length > MAX_TOOL_RESULT_CHARS) result.take(MAX_TOOL_RESULT_CHARS) + "…[تم اقتطاع النتيجة]" else result
     } catch (e: CancellationException) {
@@ -231,6 +284,17 @@ class AssistantRepositoryImpl @Inject constructor(
     } catch (e: Exception) {
         """{"error":"tool_failed","tool":"${call.name}"}"""
     }
+
+    /** The smart tools' results become cards under the answer, so the model can write one sentence instead of a table. */
+    private fun collectCards(conversationId: String, toolName: String, resultJson: String) {
+        if (toolName !in AssistantToolCatalog.SMART_TOOL_NAMES) return
+        val parsed = AiJson.parseObject(resultJson) ?: return
+        val cards = AssistantCardBuilder.fromToolResult(toolName, parsed)
+        if (cards.isNotEmpty()) turnCards.getOrPut(conversationId) { mutableListOf() }.addAll(cards)
+    }
+
+    private fun takeCards(conversationId: String): List<AssistantCard> =
+        turnCards.remove(conversationId)?.take(MAX_CARDS_PER_ANSWER).orEmpty()
 
     private fun siteOf(toolName: String): ToolExecutionSite =
         if (toolName in AssistantToolCatalog.WORKSPACE_TOOL_NAMES) ToolExecutionSite.BACKEND else ToolExecutionSite.LOCAL
@@ -272,6 +336,10 @@ class AssistantRepositoryImpl @Inject constructor(
         const val MAX_HISTORY_MESSAGES = 30
         const val MAX_TOOL_RESULT_CHARS = 8_000
         const val MAX_REPLY_TOKENS = 2_000
+        const val MAX_CARDS_PER_ANSWER = 3
+
+        /** Failures that mean "the model could not be reached" (not "it answered badly"): the person gets the offline commands instead. */
+        val OFFLINE_FALLBACK_CODES = setOf("AI_TIMEOUT", "BACKEND_TIMEOUT", "AI_NOT_CONFIGURED")
         const val DECLINED_RESULT_JSON = """{"status":"declined_by_user"}"""
     }
 }

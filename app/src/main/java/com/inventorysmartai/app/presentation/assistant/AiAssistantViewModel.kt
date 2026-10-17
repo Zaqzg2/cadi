@@ -6,8 +6,10 @@ import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
 import com.inventorysmartai.app.domain.assistant.AssistantUiBridge
 import com.inventorysmartai.app.domain.assistant.AttachmentInfo
+import com.inventorysmartai.app.domain.assistant.CardAction
 import com.inventorysmartai.app.domain.assistant.ChatMessage
 import com.inventorysmartai.app.domain.assistant.ChatRole
+import com.inventorysmartai.app.domain.assistant.UiCommand
 import com.inventorysmartai.app.domain.repository.AssistantRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +53,9 @@ class AiAssistantViewModel @Inject constructor(
     /** True while the chat is on screen. When the assistant opens another screen for the person ("افتح صفحة الأصناف"), its
      *  answer is shown over THAT screen instead (see AppNavHost), and "فتح المحادثة" there comes back to this same conversation. */
     private var chatVisible = false
+
+    /** [AssistantUiBridge.queuedCount] when the current request started: if it changed, the assistant opened a screen meanwhile. */
+    private var queuedAtStart = 0
 
     fun onChatVisible(visible: Boolean) {
         chatVisible = visible
@@ -100,8 +105,19 @@ class AiAssistantViewModel @Inject constructor(
         val typed = current.inputText.trim()
         val files = current.pendingAttachments
         if ((typed.isEmpty() && files.isEmpty()) || current.isSending || current.isAttaching) return
-        val text = typed.ifEmpty { DEFAULT_FILE_PROMPT }
+        submit(typed.ifEmpty { DEFAULT_FILE_PROMPT }, files, clearInput = true)
+    }
 
+    /** A chip or a card button that sends a ready sentence («افتح صفحة الأصناف»). It never carries the files being written. */
+    fun sendQuick(text: String) {
+        val current = _state.value
+        val clean = text.trim()
+        if (clean.isEmpty() || current.isSending || current.isAttaching) return
+        submit(clean, emptyList(), clearInput = false)
+    }
+
+    private fun submit(text: String, files: List<AttachmentInfo>, clearInput: Boolean) {
+        queuedAtStart = uiBridge.queuedCount
         val userMessage = ChatMessage(
             id = UUID.randomUUID().toString(),
             role = ChatRole.USER,
@@ -109,16 +125,45 @@ class AiAssistantViewModel @Inject constructor(
             timestamp = System.currentTimeMillis(),
             attachments = files
         )
-        update { it.copy(messages = it.messages + userMessage, inputText = "", pendingAttachments = emptyList(), isSending = true, errorMessage = null) }
-
+        update {
+            it.copy(
+                messages = it.messages + userMessage,
+                inputText = if (clearInput) "" else it.inputText,
+                pendingAttachments = if (clearInput) emptyList() else it.pendingAttachments,
+                isSending = true,
+                errorMessage = null
+            )
+        }
         viewModelScope.launch {
             val result = assistantRepository.sendMessage(conversationId, text, context, files.map { it.id })
             handleResult(result)
         }
     }
 
+    /**
+     * A button on an answer card. Opening a screen and sending a sentence are immediate; the two that change data (a draft purchase
+     * request, a saved alias) go through the repository and come back as the same confirmation dialog as any other write.
+     */
+    fun onCardAction(action: CardAction) {
+        when (action) {
+            is CardAction.OpenRoute -> {
+                uiBridge.post(UiCommand.Navigate(action.route))
+            }
+            is CardAction.SendText -> sendQuick(action.text)
+            is CardAction.DraftPurchase, is CardAction.SaveAlias -> {
+                if (_state.value.isSending) return
+                queuedAtStart = uiBridge.queuedCount
+                update { it.copy(isSending = true, errorMessage = null) }
+                viewModelScope.launch {
+                    handleResult(assistantRepository.performCardAction(conversationId, action))
+                }
+            }
+        }
+    }
+
     fun onConfirmPendingAction(approved: Boolean) {
         if (_state.value.pendingConfirmationTextAr == null) return
+        queuedAtStart = uiBridge.queuedCount
         update { it.copy(pendingConfirmationTextAr = null, isSending = true) }
         viewModelScope.launch {
             val result = assistantRepository.confirmPendingAction(conversationId, approved)
@@ -129,6 +174,9 @@ class AiAssistantViewModel @Inject constructor(
     fun consumeError() = update { it.copy(errorMessage = null) }
 
     private fun handleResult(result: AssistantStepResult) {
+        // The answer goes over the other screen when the chat is not showing — or when the assistant just opened that screen
+        // (the chat may still be on screen for the instant before the navigation completes).
+        val showOverOtherScreen = !chatVisible || uiBridge.queuedCount != queuedAtStart
         when (result) {
             is AssistantStepResult.Final -> {
                 val assistantMessage = ChatMessage(
@@ -137,18 +185,19 @@ class AiAssistantViewModel @Inject constructor(
                     text = result.text.ifBlank { "لم يصل ردّ من المساعد، يرجى المحاولة مرة أخرى." },
                     timestamp = System.currentTimeMillis(),
                     usedLocalData = result.usedLocalData,
-                    files = result.files
+                    files = result.files,
+                    cards = result.cards
                 )
                 update { it.copy(messages = it.messages + assistantMessage, isSending = false, pendingConfirmationTextAr = null) }
-                if (!chatVisible) uiBridge.postNotice(assistantMessage.text)
+                if (showOverOtherScreen) uiBridge.postNotice(assistantMessage.text)
             }
             is AssistantStepResult.ConfirmationRequired -> {
                 update { it.copy(isSending = false, pendingConfirmationTextAr = result.actionDescriptionAr) }
-                if (!chatVisible) uiBridge.postNotice("المساعد ينتظر موافقتك: ${result.actionDescriptionAr}")
+                if (showOverOtherScreen) uiBridge.postNotice("المساعد ينتظر موافقتك: ${result.actionDescriptionAr}")
             }
             is AssistantStepResult.Error -> {
                 update { it.copy(isSending = false, errorMessage = result.messageAr, pendingConfirmationTextAr = null) }
-                if (!chatVisible) uiBridge.postNotice(result.messageAr)
+                if (showOverOtherScreen) uiBridge.postNotice(result.messageAr)
             }
         }
     }

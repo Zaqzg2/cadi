@@ -334,7 +334,8 @@ internal object AssistantToolCatalog {
                 "branchId" to int("Branch id"),
                 "category" to str("Category NAME as the person said it; alternative to categoryId"),
                 "categoryId" to int("Category id"),
-                "sortBy" to strEnum("Order of the list", listOf("NAME_ASC", "NAME_DESC", "QUANTITY_ASC", "QUANTITY_DESC"))
+                "sortBy" to strEnum("Order of the list", listOf("NAME_ASC", "NAME_DESC", "QUANTITY_ASC", "QUANTITY_DESC")),
+                "open" to bool("Default true: open the item list on screen. false = only report what matches (the chat shows it as a table)")
             ))),
         tool("openRecord",
             "Open one existing record's detail screen (changes no data): a product, a purchase request, a sales invoice or a stock count. " +
@@ -434,5 +435,6 @@ internal object AssistantToolCatalog {
         التقارير: لأسئلة الأهداف والوارد والمبيعات وترتيب الفروع استخدم analyzeGoals وcompareFlows وrankBranchesByGoals؛ الأرقام جاهزة فلا تحسب بنفسك، واذكر أساس الحساب (basis) — فالأهداف للشركة كلها لا لكل فرع.
         أمر الشراء من النواقص: suggestPurchaseOrder، ثم اعرض الأصناف والقاعدة المستخدمة وعدّل الكميات بطلب المستخدم، ثم draftPurchaseOrder (مسودة تُفتح للمراجعة). لا تقل أبدًا إنك أرسلت الطلب أو اعتمدته؛ الإرسال زرّ المستخدم. لا تستخدم createPurchaseRequest لذلك إلا بطلب صريح لإرسال فوري.
         فاتورة شراء مصورة: اقرأها بـ readAttachment ورتّب المورد والتاريخ والرقم والبنود (الاسم والكمية والسعر) كما وردت دون تخمين، ثم matchProductNames لأسماء البنود؛ ما ليس EXACT يختاره المستخدم ولا تعتمده بنفسك، وبعد تأكيده addProductAlias. نبّه إلى أخطاء القراءة الضوئية في الأرقام.
+        البطاقات: نتائج أدوات التحكم والتقارير والمطابقة تظهر للمستخدم تلقائيًا كجداول وأشرطة تحت ردّك، فلا تكرر الأرقام ولا ترسم جدولًا؛ لخّص الخلاصة في جملتين.
     """.trimIndent()
 }

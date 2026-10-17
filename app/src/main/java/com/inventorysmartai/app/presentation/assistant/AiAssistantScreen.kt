@@ -9,6 +9,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,23 +32,35 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -57,6 +70,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -72,8 +87,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -82,10 +99,10 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.ActionConfirmationDialog
-import com.inventorysmartai.app.core.designsystem.component.AppTopBar
-import com.inventorysmartai.app.core.designsystem.component.EmptyStateView
+import com.inventorysmartai.app.domain.assistant.AssistantQuickCommands
 import com.inventorysmartai.app.domain.assistant.AttachmentInfo
 import com.inventorysmartai.app.domain.assistant.AttachmentKind
+import com.inventorysmartai.app.domain.assistant.CardAction
 import com.inventorysmartai.app.domain.assistant.ChatMessage
 import com.inventorysmartai.app.domain.assistant.ChatRole
 import com.inventorysmartai.app.domain.assistant.GeneratedFile
@@ -93,18 +110,6 @@ import com.inventorysmartai.app.domain.assistant.GeneratedFileType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-
-private val SUGGESTED_PROMPTS = listOf(
-    "افتح صفحة الأصناف",
-    "فلتر الأصناف التي رصيدها أقل من 10",
-    "ما الأصناف التي لم تحقق هدف الشهر؟",
-    "رتب الفروع حسب نسبة تحقيق الهدف",
-    "جهّز أمر شراء للنواقص",
-    "ما الأصناف المنخفضة؟",
-    "ما الأصناف التي مخزونها صفر؟",
-    "ما الأصناف القريبة من الانتهاء؟",
-    "أنشئ تقريرًا عن الجرد"
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -150,34 +155,14 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
     }
 
     Scaffold(
-        topBar = { AppTopBar(title = "المساعد الذكي", onBack = { navController.popBackStack() }) },
+        topBar = { AssistantHeader(onBack = { navController.popBackStack() }) },
         snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (state.messages.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        EmptyStateView(
-                            title = "المساعد الذكي",
-                            description = "اسأل عن المخزون، المبيعات، طلبات الشراء، أو الأهداف — يستخدم المساعد بيانات تطبيقك الفعلية للإجابة."
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        SUGGESTED_PROMPTS.forEach { prompt ->
-                            Card(
-                                modifier = Modifier.padding(vertical = 4.dp).widthIn(max = 320.dp),
-                                onClick = { viewModel.onInputChanged(prompt); viewModel.sendMessage() }
-                            ) {
-                                Text(prompt, modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp))
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "يمكنك أيضًا إرفاق ملف (Excel أو CSV أو Word أو PDF أو صورة) لتحليله أو تعبئة نموذج أو تحويله إلى لوحة بيانات أو حساب العمولات.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 24.dp).widthIn(max = 340.dp)
-                        )
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        AssistantWelcome(onCommand = viewModel::sendQuick)
                     }
                 }
             } else {
@@ -190,6 +175,7 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
                     items(state.messages, key = { it.id }) { message ->
                         ChatBubble(
                             message = message,
+                            onCardAction = viewModel::onCardAction,
                             onOpenFile = { file ->
                                 if (file.type == GeneratedFileType.DASHBOARD) dashboardToView = file else openFile(context, file)
                             },
@@ -210,6 +196,8 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
                 onAttach = { filePicker.launch(arrayOf("*/*")) },
                 onRemoveAttachment = viewModel::onRemoveAttachment,
                 onQuickPrompt = viewModel::onInputChanged,
+                showCommandChips = state.messages.isNotEmpty(),
+                onCommand = viewModel::sendQuick,
                 onTextChanged = viewModel::onInputChanged,
                 onSend = viewModel::sendMessage
             )
@@ -218,25 +206,39 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
 }
 
 @Composable
-private fun ChatBubble(message: ChatMessage, onOpenFile: (GeneratedFile) -> Unit, onShareFile: (GeneratedFile) -> Unit) {
+private fun ChatBubble(
+    message: ChatMessage,
+    onCardAction: (CardAction) -> Unit,
+    onOpenFile: (GeneratedFile) -> Unit,
+    onShareFile: (GeneratedFile) -> Unit
+) {
     val isUser = message.role == ChatRole.USER
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start) {
-        Column(horizontalAlignment = if (isUser) Alignment.End else Alignment.Start, modifier = Modifier.widthIn(max = 300.dp)) {
+    // The design: the person's words in a blue bubble on the right (the start side in RTL); the assistant on the left with its avatar.
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (isUser) Arrangement.Start else Arrangement.End) {
+        Column(
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+            modifier = if (isUser) Modifier.widthIn(max = 300.dp) else Modifier.weight(1f, fill = false).widthIn(max = 380.dp)
+        ) {
             message.attachments.forEach { attachment ->
                 AttachmentChip(info = attachment, onRemove = null)
                 Spacer(Modifier.height(4.dp))
             }
             Card(
+                shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = if (isUser) 4.dp else 18.dp, bottomEnd = if (isUser) 18.dp else 4.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh
                 )
             ) {
                 Text(
                     message.text,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Start
                 )
+            }
+            if (!isUser && message.cards.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                AssistantCards(cards = message.cards, onAction = onCardAction)
             }
             message.files.forEach { file ->
                 Spacer(Modifier.height(6.dp))
@@ -251,6 +253,156 @@ private fun ChatBubble(message: ChatMessage, onOpenFile: (GeneratedFile) -> Unit
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 2.dp, end = 4.dp, start = 4.dp)
+                )
+            }
+        }
+        if (!isUser) {
+            Spacer(Modifier.width(8.dp))
+            AssistantAvatar(size = 30.dp)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------- the look of the design
+
+@Composable
+private fun AssistantAvatar(size: Dp) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(size).background(MaterialTheme.colorScheme.primary, CircleShape)
+    ) {
+        Icon(Icons.Filled.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(size * 0.58f))
+    }
+}
+
+/** The title bar of the design: the robot, "المحلل الذكي للمخزون", and the reassurance that the basic commands need no internet. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AssistantHeader(onBack: () -> Unit) {
+    TopAppBar(
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AssistantAvatar(size = 38.dp)
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("المحلل الذكي للمخزون", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(7.dp).background(MaterialTheme.colorScheme.secondary, CircleShape))
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            "الأوامر الأساسية تعمل بدون إنترنت",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        },
+        navigationIcon = {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع") }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest)
+    )
+}
+
+/** The empty chat: who the assistant is, and a grid of commands to tap — each one a sentence that works with no internet. */
+@Composable
+private fun AssistantWelcome(onCommand: (String) -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        AssistantAvatar(size = 72.dp)
+        Text("كيف أساعدك اليوم؟", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(
+            "اكتب أمرك أو اضغط على أحد الأوامر — أنفّذه على بيانات تطبيقك مباشرة، وبدون إنترنت.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 340.dp)
+        )
+        Spacer(Modifier.height(2.dp))
+        AssistantQuickCommands.all.chunked(2).forEachIndexed { rowIndex, pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                pair.forEachIndexed { column, command ->
+                    CommandCard(
+                        label = command.label,
+                        icon = commandIcon(rowIndex * 2 + column),
+                        onClick = { onCommand(command.text) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Text(
+            "يمكنك أيضًا إرفاق ملف (Excel أو CSV أو Word أو PDF أو صورة) لتحليله — وقراءة الصور تحتاج إنترنت.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 12.dp).widthIn(max = 340.dp)
+        )
+    }
+}
+
+@Composable
+private fun CommandCard(label: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = modifier
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 14.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape)
+            ) {
+                Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+            }
+            Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2)
+        }
+    }
+}
+
+/** One icon per command, in the order of [AssistantQuickCommands.all]. */
+private fun commandIcon(index: Int): ImageVector = when (index) {
+    0 -> Icons.Filled.Inventory2
+    1 -> Icons.Filled.FilterList
+    2 -> Icons.Filled.DateRange
+    3 -> Icons.Filled.Warning
+    4 -> Icons.Filled.Flag
+    5 -> Icons.Filled.BarChart
+    6 -> Icons.Filled.Dashboard
+    7 -> Icons.Filled.ShoppingCart
+    else -> Icons.Filled.Search
+}
+
+/** The commands as chips above the input box — one tap runs one. */
+@Composable
+private fun CommandChips(enabled: Boolean, onCommand: (String) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(AssistantQuickCommands.all, key = { it.label }) { command ->
+            Surface(
+                modifier = Modifier.clip(RoundedCornerShape(20.dp)).clickable(enabled = enabled) { onCommand(command.text) },
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Text(
+                    command.label,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
@@ -279,10 +431,15 @@ private fun ChatInputBar(
     onAttach: () -> Unit,
     onRemoveAttachment: (String) -> Unit,
     onQuickPrompt: (String) -> Unit,
+    showCommandChips: Boolean,
+    onCommand: (String) -> Unit,
     onTextChanged: (String) -> Unit,
     onSend: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
+        if (showCommandChips && pendingAttachments.isEmpty()) {
+            CommandChips(enabled = enabled, onCommand = onCommand)
+        }
         if (pendingAttachments.isNotEmpty()) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 12.dp),
@@ -328,11 +485,21 @@ private fun ChatInputBar(
                 onValueChange = onTextChanged,
                 modifier = Modifier.weight(1f),
                 enabled = enabled,
-                placeholder = { Text(if (pendingAttachments.isEmpty()) "اكتب سؤالك هنا..." else "ماذا تريد أن أفعل بالملف؟") },
+                shape = RoundedCornerShape(24.dp),
+                placeholder = { Text(if (pendingAttachments.isEmpty()) "اكتب أمرك هنا..." else "ماذا تريد أن أفعل بالملف؟") },
                 maxLines = 5
             )
             Spacer(Modifier.width(8.dp))
-            IconButton(onClick = onSend, enabled = enabled && !attaching && (text.isNotBlank() || pendingAttachments.isNotEmpty())) {
+            IconButton(
+                onClick = onSend,
+                enabled = enabled && !attaching && (text.isNotBlank() || pendingAttachments.isNotEmpty()),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    disabledContentColor = MaterialTheme.colorScheme.outline
+                )
+            ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "إرسال")
             }
         }

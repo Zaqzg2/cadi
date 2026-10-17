@@ -141,10 +141,17 @@ sealed class Destination(val route: String) {
 
     companion object {
         /** Routes where the bottom bar is shown — every "MAIN NAVIGATION" section plus the
-         *  More hub. Everything else is a secondary page navigated to normally, per spec. */
-        val topLevelRoutes = setOf(
-            Home.route, Stock.route, Inventory.route, InventoryFiltered.route, Goals.route, CountingList.route, PurchaseList.route,
-            SalesList.route, Reports.route, DataCenter.route, AiAssistant.route, Settings.route, More.route
-        )
+         *  More hub. Everything else is a secondary page navigated to normally, per spec.
+         *
+         *  `by lazy` is deliberate. Built eagerly, this set is evaluated while `Destination` itself is still being initialised, and it
+         *  reads `Home.route`, `Stock.route`… — objects that extend `Destination`. Whichever of them was touched FIRST (a test, or
+         *  any code that reaches `Destination.Something` before `Destination.topLevelRoutes`) is then still half-built and reads as
+         *  null: an ExceptionInInitializerError. Deferring the set to its first use removes the cycle. */
+        val topLevelRoutes: Set<String> by lazy {
+            setOf(
+                Home.route, Stock.route, Inventory.route, InventoryFiltered.route, Goals.route, CountingList.route, PurchaseList.route,
+                SalesList.route, Reports.route, DataCenter.route, AiAssistant.route, Settings.route, More.route
+            )
+        }
     }
 }

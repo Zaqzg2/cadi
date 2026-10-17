@@ -3,6 +3,7 @@ package com.inventorysmartai.app.domain.repository
 import com.inventorysmartai.app.domain.assistant.AssistantContext
 import com.inventorysmartai.app.domain.assistant.AssistantStepResult
 import com.inventorysmartai.app.domain.assistant.AttachmentInfo
+import com.inventorysmartai.app.domain.assistant.CardAction
 import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocument
 import com.inventorysmartai.app.domain.importing.ai.AiExtractionDocumentType
 import kotlinx.coroutines.flow.Flow
@@ -32,6 +33,10 @@ interface AssistantRepository {
     /** Resumes the same conversation after the user answered the confirmation dialog for the
      *  most recent [AssistantStepResult.ConfirmationRequired]. */
     suspend fun confirmPendingAction(conversationId: String, approved: Boolean): AssistantStepResult
+
+    /** A button on an answer card that changes data (a draft purchase request, a saved alias). Never runs by itself: it
+     *  returns [AssistantStepResult.ConfirmationRequired] for the same confirmation dialog, then [confirmPendingAction] runs it. */
+    suspend fun performCardAction(conversationId: String, action: CardAction): AssistantStepResult
 }
 
 data class GoogleAuthStatus(val linked: Boolean, val grantedScopes: List<String> = emptyList())

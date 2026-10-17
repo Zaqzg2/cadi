@@ -82,20 +82,22 @@ class AppControlToolExecutor @Inject constructor(
             ?: return ToolArgs.invalid("sortBy must be one of ${SortOrder.entries.joinToString { it.name }}")
 
         // a branch / category may be given by id or by the name the person said ("الفرع الأول")
+        val branches = catalogRepository.observeBranches().first()
         val (branchId, branchError) = resolveByIdOrName(
             id = ToolArgs.long(args, "branchId"),
             name = ToolArgs.string(args, "branch"),
-            items = catalogRepository.observeBranches().first(),
+            items = branches,
             idOf = { it.id },
             nameOf = { it.name },
             kind = "branch",
             kindAr = "فرع"
         )
         if (branchError != null) return branchError
+        val categories = catalogRepository.observeCategories().first()
         val (categoryId, categoryError) = resolveByIdOrName(
             id = ToolArgs.long(args, "categoryId"),
             name = ToolArgs.string(args, "category"),
-            items = catalogRepository.observeCategories().first(),
+            items = categories,
             idOf = { it.id },
             nameOf = { it.name },
             kind = "category",
@@ -117,12 +119,19 @@ class AppControlToolExecutor @Inject constructor(
         // The same rules the screen will apply, so the number said in the chat is the number the person sees on the list.
         val all = productRepository.observeProductsWithStock().first()
         val matching = filter.filterAndSort(all)
-        val posted = bridge.post(UiCommand.Navigate(Destination.InventoryFiltered.createRoute(filter)))
+        val route = Destination.InventoryFiltered.createRoute(filter)
+        // open=false only reports what matches (the chat draws it as a card with an "عرض الكل" button); the default opens the list.
+        val posted = if (ToolArgs.bool(args, "open") ?: true) bridge.post(UiCommand.Navigate(route)) else false
 
         return mapOf(
             "opened" to posted,
+            "route" to route,
             "screen" to "الأصناف",
-            "appliedFilters" to appliedFilters(filter),
+            "appliedFilters" to appliedFilters(
+                filter,
+                branchName = branches.firstOrNull { it.id == branchId }?.name,
+                categoryName = categories.firstOrNull { it.id == categoryId }?.name
+            ),
             "matchingCount" to matching.size,
             "totalProducts" to all.size,
             "shown" to matching.take(PREVIEW_ROWS).map { summary ->
@@ -137,12 +146,14 @@ class AppControlToolExecutor @Inject constructor(
         )
     }
 
-    private fun appliedFilters(filter: InventoryListFilter): Map<String, Any?> = buildMap {
+    private fun appliedFilters(filter: InventoryListFilter, branchName: String?, categoryName: String?): Map<String, Any?> = buildMap {
         if (filter.status != InventoryStatusFilter.ALL) put("status", filter.status.name)
         filter.quantityLabelAr()?.let { put("quantity", it) }
         if (filter.searchQuery.isNotBlank()) put("search", filter.searchQuery)
         filter.branchId?.let { put("branchId", it) }
+        branchName?.let { put("branchName", it) }
         filter.categoryId?.let { put("categoryId", it) }
+        categoryName?.let { put("categoryName", it) }
         if (filter.sortOrder != SortOrder.NAME_ASC) put("sortBy", filter.sortOrder.name)
     }
 
