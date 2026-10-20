@@ -35,7 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
-import com.inventorysmartai.app.core.designsystem.component.SearchField
+import com.inventorysmartai.app.core.designsystem.component.rememberTopBarSearch
 import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
 import com.inventorysmartai.app.navigation.Destination
@@ -56,9 +56,10 @@ fun SalesListScreen(navController: NavController, viewModel: SalesListViewModel 
     var pendingDelete by remember { mutableStateOf<SalesInvoice?>(null) }
 
     LaunchedEffect(message) { message?.let { snackbarHost.showSnackbar(it); viewModel.onMessageShown() } }
+    val search = rememberTopBarSearch(query = query, onQueryChange = viewModel::onQueryChange)
 
     Scaffold(
-        topBar = { AppTopBar(title = "المبيعات") },
+        topBar = { AppTopBar(title = "المبيعات", onBack = { navController.popBackStack() }, search = search) },
         snackbarHost = { SnackbarHost(snackbarHost) },
         floatingActionButton = {
             FloatingActionButton(onClick = { navController.navigate(Destination.SalesDetail.createRoute()) }) {
@@ -67,11 +68,6 @@ fun SalesListScreen(navController: NavController, viewModel: SalesListViewModel 
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            SearchField(
-                value = query,
-                onValueChange = viewModel::onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
-            )
             StateContent(
                 state = uiState,
                 onRetry = {},

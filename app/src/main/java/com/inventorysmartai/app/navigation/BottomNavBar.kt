@@ -2,10 +2,10 @@ package com.inventorysmartai.app.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,17 +21,18 @@ private val stockGroup = setOf(
     Destination.Stock.route, Destination.Inventory.route, Destination.InventoryFiltered.route,
     Destination.CountingList.route, Destination.PurchaseList.route
 )
-private val mainRoutes = stockGroup + setOf(Destination.Home.route, Destination.SalesList.route, Destination.Reports.route)
+/** المسارات التي لها تبويب خاص: ما عداها من الصفحات الرئيسية (المبيعات، مركز البيانات، المساعد، الإعدادات) يُفعّل «المزيد». */
+private val mainRoutes = stockGroup + setOf(Destination.Home.route, Destination.Goals.route, Destination.Reports.route)
 
-/** ترتيب التبويبات الرئيسية (من اليمين لليسار) — يُستخدم أيضًا للتنقل بالسحب. */
+/** ترتيب التبويبات الرئيسية (من اليمين لليسار): الرئيسية · المخزون · الأهداف · التقارير · المزيد — يُستخدم أيضًا للتنقل بالسحب. */
 val mainTabRoutes = listOf(
-    Destination.Home.route, Destination.Stock.route, Destination.SalesList.route, Destination.Reports.route, Destination.More.route
+    Destination.Home.route, Destination.Stock.route, Destination.Goals.route, Destination.Reports.route, Destination.More.route
 )
 
 private val bottomNavItems = listOf(
     BottomNavItem(Destination.Home.route, "الرئيسية", Icons.Filled.Home) { it == Destination.Home.route },
     BottomNavItem(Destination.Stock.route, "المخزون", Icons.Filled.Inventory2) { it != null && it in stockGroup },
-    BottomNavItem(Destination.SalesList.route, "المبيعات", Icons.Filled.PointOfSale) { it == Destination.SalesList.route },
+    BottomNavItem(Destination.Goals.route, "الأهداف", Icons.Filled.Flag) { it == Destination.Goals.route },
     BottomNavItem(Destination.Reports.route, "التقارير", Icons.Filled.BarChart) { it == Destination.Reports.route },
     BottomNavItem(Destination.More.route, "المزيد", Icons.Filled.MoreHoriz) {
         it != null && it !in mainRoutes && it in Destination.topLevelRoutes

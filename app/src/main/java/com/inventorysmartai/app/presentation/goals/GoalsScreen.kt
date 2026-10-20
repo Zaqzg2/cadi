@@ -10,42 +10,61 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.common.Formatters
-import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
-import androidx.compose.material3.Surface
-import com.inventorysmartai.app.presentation.common.SelectField
-import com.inventorysmartai.app.presentation.common.PickerItem
+import com.inventorysmartai.app.core.designsystem.component.CardAction
+import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
+import com.inventorysmartai.app.core.designsystem.component.LongPressCard
+import com.inventorysmartai.app.core.designsystem.component.StateContent
+import com.inventorysmartai.app.core.designsystem.component.StatusPill
+import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
+import com.inventorysmartai.app.core.designsystem.component.rememberTopBarSearch
+import com.inventorysmartai.app.navigation.Destination
 
+/**
+ * قائمة الأهداف — موحَّدة مع قائمة الجرد: ترويسة مدمجة وبحث بالأيقونة، بطاقات (سحب/ضغط مطوّل للحذف)،
+ * وزر + لهدف جديد. الضغط على بطاقة يفتح نموذج ذلك الهدف في صفحة مستقلة ([GoalDetailScreen]).
+ */
 @Composable
 fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val query by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val snackbarHost = remember { SnackbarHostState() }
+    var pendingDelete by remember { mutableStateOf<GoalListItem?>(null) }
+
+    LaunchedEffect(message) { message?.let { snackbarHost.showSnackbar(it); viewModel.onMessageShown() } }
+    val search = rememberTopBarSearch(query = query, onQueryChange = viewModel::onQueryChange, placeholder = "بحث باسم الصنف")
+    val openGoal: (GoalListItem) -> Unit = { navController.navigate(Destination.GoalDetail.createRoute(it.goal.id)) }
 
     Scaffold(
-        topBar = { AppTopBar(title = "الأهداف والعمولات", onBack = { navController.popBackStack() }) },
-        bottomBar = {
-            Surface(tonalElevation = 3.dp) {
-                Button(onClick = viewModel::onSave, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Text("حفظ الهدف")
-                }
+        topBar = { AppTopBar(title = "الأهداف والعمولات", search = search) },
+        snackbarHost = { SnackbarHost(snackbarHost) },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { navController.navigate(Destination.GoalDetail.createRoute()) }) {
+                Icon(Icons.Filled.Add, contentDescription = "هدف جديد")
             }
         }
     ) { padding ->
@@ -55,64 +74,56 @@ fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltVi
                 onRetry = {},
                 emptyContent = {
                     Column(modifier = Modifier.fillMaxSize().padding(32.dp)) {
-                        Text("أضف صنفاً من المخزون أولاً لتتمكن من تحديد هدف له", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (query.isNotBlank()) "لا توجد نتائج للبحث" else "لا توجد أهداف بعد — اضغط + لتحديد أول هدف",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
-            ) { data ->
-                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    item {
-                        SelectField(
-                            label = "الصنف",
-                            items = data.products.map { PickerItem(it.id, it.name) },
-                            selectedId = data.selectedProductId,
-                            onSelected = { id -> if (id != null) viewModel.onProductSelected(id) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-
-                    items(data.groups, key = { it.localId }) { row ->
-                        GoalGroupCard(
-                            row = row,
-                            onTargetChange = { viewModel.onTargetChange(row.localId, it) },
-                            onCommissionValueChange = { viewModel.onCommissionValueChange(row.localId, it) },
-                            onCommissionTypeChange = { viewModel.onCommissionTypeChange(row.localId, it) },
-                            onRemove = { viewModel.onRemoveGroup(row.localId) }
-                        )
-                    }
-
-                    item {
-                        OutlinedButton(onClick = viewModel::onAddGroup, modifier = Modifier.fillMaxWidth()) {
-                            Text("إضافة مجموعة")
-                        }
-                    }
-
-                    item {
-                        val achievement = data.achievement
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("الملخص", style = MaterialTheme.typography.titleSmall)
-                                SummaryRow("الإجمالي", Formatters.formatNumber(achievement?.totalTarget ?: 0.0))
-                                SummaryRow("المحقق", Formatters.formatNumber(achievement?.achievedQuantity ?: 0.0))
-                                SummaryRow("المتبقي", Formatters.formatNumber(achievement?.remainingQuantity ?: 0.0))
-                                SummaryRow("نسبة التحقيق", Formatters.formatPercent(achievement?.achievementPercent ?: 0.0))
+            ) { list ->
+                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(list, key = { it.goal.id }) { item ->
+                        // swipe: delete, tap: open — same behaviour as the counting list
+                        SwipeActionRow(onDelete = { pendingDelete = item }) {
+                            LongPressCard(
+                                onClick = { openGoal(item) },
+                                actions = listOf(
+                                    CardAction("فتح") { openGoal(item) },
+                                    CardAction("حذف") { pendingDelete = item }
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(item.goal.productName ?: "صنف", style = MaterialTheme.typography.bodyLarge)
+                                        Text(
+                                            "${Formatters.formatDate(item.goal.periodStart)} • المحقق ${Formatters.formatNumber(item.achievement.achievedQuantity)} من ${Formatters.formatNumber(item.achievement.totalTarget)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    StatusPill(
+                                        text = Formatters.formatPercent(item.achievement.achievementPercent),
+                                        color = if (item.achievement.achievementPercent >= 100.0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                    )
+                                }
                             }
                         }
-                    }
-
-
-                    if (data.isSaved) {
-                        item { Snackbar { Text("تم حفظ الهدف بنجاح") } }
                     }
                 }
             }
         }
     }
-}
 
-@Composable
-private fun SummaryRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.titleMedium)
+    pendingDelete?.let { item ->
+        DestructiveConfirmDialog(
+            title = "حذف الهدف؟",
+            message = "سيُحذف هدف «${item.goal.productName ?: "الصنف"}» ومجموعاته نهائيًا. لا تأثير على المخزون ولا على المبيعات.",
+            onConfirm = { pendingDelete = null; viewModel.delete(item) },
+            onDismiss = { pendingDelete = null }
+        )
     }
 }

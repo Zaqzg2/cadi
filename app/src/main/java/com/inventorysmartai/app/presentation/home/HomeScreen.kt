@@ -3,8 +3,10 @@ package com.inventorysmartai.app.presentation.home
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,6 +42,7 @@ import com.inventorysmartai.app.domain.model.AlertSeverity
 import com.inventorysmartai.app.domain.model.DashboardAlert
 import com.inventorysmartai.app.domain.model.DashboardSummary
 import com.inventorysmartai.app.navigation.Destination
+import com.inventorysmartai.app.navigation.navigateToTab
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 
 @Composable
@@ -64,7 +68,20 @@ private fun HomeContent(summary: DashboardSummary, navController: NavController)
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            AiAssistantEntryCard(onClick = { navController.navigate(Destination.AiAssistant.route) })
+            // المساعد والاستيراد جنبًا إلى جنب بارتفاع واحد: أقصر من بطاقة بعرض الصفحة وأقرب للمس.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+            ) {
+                AiAssistantEntryCard(
+                    onClick = { navController.navigate(Destination.AiAssistant.route) },
+                    modifier = Modifier.weight(1.4f).fillMaxHeight()
+                )
+                ImportEntryCard(
+                    onClick = { navController.navigate(Destination.ImportSetup.route) },
+                    modifier = Modifier.weight(1f).fillMaxHeight()
+                )
+            }
         }
 
         item {
@@ -74,7 +91,7 @@ private fun HomeContent(summary: DashboardSummary, navController: NavController)
         item {
             AchievementCard(
                 percent = summary.goalsAchievementPercent,
-                onClick = { navController.navigate(Destination.Goals.route) }
+                onClick = { navigateToTab(navController, Destination.Goals.route) }
             )
         }
 
@@ -181,18 +198,45 @@ private fun AchievementCard(percent: Double, onClick: () -> Unit) {
 }
 
 @Composable
-private fun AiAssistantEntryCard(onClick: () -> Unit) {
+private fun AiAssistantEntryCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val content = MaterialTheme.colorScheme.onPrimaryContainer
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         onClick = onClick
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Icon(Icons.Filled.SmartToy, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-            Spacer(Modifier.width(12.dp))
+        Row(
+            modifier = Modifier.fillMaxHeight().padding(12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.SmartToy, contentDescription = null, tint = content)
+            Spacer(Modifier.width(10.dp))
             Column {
-                Text("المساعد الذكي", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                Text("اسأل عن مخزونك — قريباً", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text("المساعد الذكي", style = MaterialTheme.typography.titleSmall, color = content, maxLines = 1)
+                Text("اسأل ونفّذ أوامرك", style = MaterialTheme.typography.bodySmall, color = content, maxLines = 2)
+            }
+        }
+    }
+}
+
+/** زر الاستيراد: يفتح مسار استيراد الملفات والصور مباشرة (نفس مسار «مركز البيانات»). */
+@Composable
+private fun ImportEntryCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val content = MaterialTheme.colorScheme.onSecondaryContainer
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.fillMaxHeight().padding(12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.UploadFile, contentDescription = null, tint = content)
+            Spacer(Modifier.width(10.dp))
+            Column {
+                Text("استيراد", style = MaterialTheme.typography.titleSmall, color = content, maxLines = 1)
+                Text("ملف أو صورة", style = MaterialTheme.typography.bodySmall, color = content, maxLines = 2)
             }
         }
     }

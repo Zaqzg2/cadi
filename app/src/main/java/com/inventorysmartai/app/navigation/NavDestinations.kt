@@ -59,7 +59,14 @@ sealed class Destination(val route: String) {
         fun createRoute(productId: Long) = "inventory/product/$productId"
     }
 
+    /** قائمة الأهداف — بنفس نمط قائمة الجرد (بطاقات + بحث بالأيقونة + زر +). تبويب رئيسي في الشريط السفلي. */
     data object Goals : Destination("goals")
+    /** نموذج هدف واحد (إضافة أو تعديل) — مثل تفاصيل الجرد: صفحة ثانوية بلا شريط سفلي. */
+    data object GoalDetail : Destination("goals/detail?goalId={goalId}") {
+        const val ARG_GOAL_ID = "goalId"
+        const val NEW_GOAL = -1L
+        fun createRoute(goalId: Long? = null) = "goals/detail?goalId=${goalId ?: NEW_GOAL}"
+    }
 
     data object CountingList : Destination("counting")
     data object CountingDetail : Destination("counting/detail?countId={countId}") {

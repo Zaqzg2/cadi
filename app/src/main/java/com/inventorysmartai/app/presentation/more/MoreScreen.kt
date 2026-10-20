@@ -14,7 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.SmartToy
@@ -37,7 +37,7 @@ import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 private data class MoreItem(val label: String, val icon: ImageVector, val route: String)
 
 private val moreItems = listOf(
-    MoreItem("الأهداف والعمولات", Icons.Filled.Flag, Destination.Goals.route),
+    MoreItem("المبيعات", Icons.Filled.PointOfSale, Destination.SalesList.route),
     MoreItem("مركز البيانات", Icons.Filled.Storage, Destination.DataCenter.route),
     MoreItem("المساعد الذكي", Icons.Filled.SmartToy, Destination.AiAssistant.route),
     MoreItem("الإعدادات", Icons.Filled.SettingsSuggest, Destination.Settings.route)

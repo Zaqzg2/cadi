@@ -117,6 +117,9 @@ interface GoalRepository {
     fun observeGoalForProduct(productId: Long): Flow<Goal?>
     fun observeOverallAchievementPercent(): Flow<Double>
     suspend fun saveGoal(goal: Goal): Long
+
+    /** يحذف الهدف ومجموعاته. لا يمسّ المبيعات ولا المخزون (الإنجاز يُحسب من المبيعات ولا يُخزَّن). */
+    suspend fun deleteGoal(goalId: Long)
 }
 
 interface PurchaseRepository {

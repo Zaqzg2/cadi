@@ -18,12 +18,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -70,8 +73,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -99,6 +100,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.ActionConfirmationDialog
+import com.inventorysmartai.app.core.designsystem.component.AppTopBarHeight
 import com.inventorysmartai.app.domain.assistant.AssistantQuickCommands
 import com.inventorysmartai.app.domain.assistant.AttachmentInfo
 import com.inventorysmartai.app.domain.assistant.AttachmentKind
@@ -158,7 +160,7 @@ fun AiAssistantScreen(navController: NavController, viewModel: AiAssistantViewMo
         topBar = { AssistantHeader(onBack = { navController.popBackStack() }) },
         snackbarHost = { SnackbarHost(snackbarHostState) { Snackbar(it) } }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             if (state.messages.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -275,35 +277,36 @@ private fun AssistantAvatar(size: Dp) {
     }
 }
 
-/** The title bar of the design: the robot, "المحلل الذكي للمخزون", and the reassurance that the basic commands need no internet. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The title bar of the design — now compact (40dp like every other page header instead of the 64dp Material bar):
+ * the robot, "المحلل الذكي للمخزون", and the reassurance that the basic commands need no internet.
+ * `heightIn(min)` rather than a fixed height so the two text lines still fit when the user enlarges the system font.
+ */
 @Composable
 private fun AssistantHeader(onBack: () -> Unit) {
-    TopAppBar(
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AssistantAvatar(size = 38.dp)
-                Spacer(Modifier.width(10.dp))
-                Column {
-                    Text("المحلل الذكي للمخزون", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(modifier = Modifier.size(7.dp).background(MaterialTheme.colorScheme.secondary, CircleShape))
-                        Spacer(Modifier.width(5.dp))
-                        Text(
-                            "الأوامر الأساسية تعمل بدون إنترنت",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Row(
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = AppTopBarHeight).padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع") }
+            AssistantAvatar(size = 28.dp)
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text("المحلل الذكي للمخزون", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(6.dp).background(MaterialTheme.colorScheme.secondary, CircleShape))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "الأوامر الأساسية تعمل بدون إنترنت",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
                 }
             }
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع") }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest)
-    )
+        }
+    }
 }
 
 /** The empty chat: who the assistant is, and a grid of commands to tap — each one a sentence that works with no internet. */

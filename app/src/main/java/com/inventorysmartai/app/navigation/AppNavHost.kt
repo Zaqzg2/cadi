@@ -3,9 +3,13 @@ package com.inventorysmartai.app.navigation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +48,7 @@ import com.inventorysmartai.app.presentation.datacenter.importflow.ImportFlowVie
 import com.inventorysmartai.app.presentation.datacenter.importflow.ImportReviewScreen
 import com.inventorysmartai.app.presentation.datacenter.importflow.ImportSetupScreen
 import com.inventorysmartai.app.presentation.datacenter.importflow.ImportSheetSelectScreen
+import com.inventorysmartai.app.presentation.goals.GoalDetailScreen
 import com.inventorysmartai.app.presentation.goals.GoalsScreen
 import com.inventorysmartai.app.presentation.home.HomeScreen
 import com.inventorysmartai.app.presentation.inventory.detail.ProductDetailScreen
@@ -66,12 +71,16 @@ import com.inventorysmartai.app.presentation.stock.StockHubScreen
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppNavHost() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in Destination.topLevelRoutes
+    // الشريط السفلي يختفي ما دامت لوحة المفاتيح ظاهرة. السبب: لوحة المفاتيح تغطّي الشريط نفسه لكن ارتفاعه يبقى محجوزًا
+    // أسفل الصفحة، فيظهر فراغ بين خانة الكتابة (مثل خانة المساعد) واللوحة.
+    val imeVisible = WindowInsets.isImeVisible
+    val showBottomBar = currentRoute in Destination.topLevelRoutes && !imeVisible
 
     // The assistant drives the app through this bridge: its tools only post a command, and this is the one place that navigates.
     val shell: AppShellViewModel = hiltViewModel()
@@ -93,7 +102,9 @@ fun AppNavHost() {
             NavHost(
                 navController = navController,
                 startDestination = Destination.Home.route,
-                modifier = Modifier.padding(innerPadding).then(
+                // consumeWindowInsets: الـ Scaffold الجذري أضاف هوامش النظام (شريط الحالة أعلى، والشريط السفلي أو شريط التنقل أسفل)؛
+                // بدونه تعيد كل صفحة إضافتها (statusBarsPadding في الترويسة، imePadding في خانات الكتابة) فتتضاعف الترويسة ويظهر فراغ فوق لوحة المفاتيح.
+                modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).then(
                     // سحب أفقي على مساحة فارغة = الانتقال للتبويب المجاور. الجداول والبطاقات القابلة للسحب
                     // تستهلك الإيماءة أولًا فلا يحدث تعارض.
                     if (currentRoute in mainTabRoutes) Modifier.pointerInput(currentRoute) {
@@ -134,6 +145,10 @@ fun AppNavHost() {
                 ) { ProductDetailScreen(navController) }
 
                 composable(Destination.Goals.route) { GoalsScreen(navController) }
+                composable(
+                    Destination.GoalDetail.route,
+                    arguments = listOf(navArgument(Destination.GoalDetail.ARG_GOAL_ID) { type = NavType.LongType; defaultValue = Destination.GoalDetail.NEW_GOAL })
+                ) { GoalDetailScreen(navController) }
 
                 composable(Destination.CountingList.route) { CountingListScreen(navController) }
                 composable(

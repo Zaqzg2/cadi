@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -56,7 +55,7 @@ import androidx.navigation.NavController
 import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.DataTable
 import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
-import com.inventorysmartai.app.core.designsystem.component.SearchField
+import com.inventorysmartai.app.core.designsystem.component.rememberTopBarSearch
 import com.inventorysmartai.app.core.designsystem.component.SelectionBar
 import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
@@ -100,7 +99,6 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
     val message by viewModel.message.collectAsStateWithLifecycle()
     val blocked by viewModel.blocked.collectAsStateWithLifecycle()
     var showFilterSheet by remember { mutableStateOf(false) }
-    var showAdvancedSearch by remember { mutableStateOf(false) }
     /** Ids waiting for the user to confirm a delete (single swipe or bulk). */
     var pendingDelete by remember { mutableStateOf<Set<Long>>(emptySet()) }
     val context = LocalContext.current
@@ -111,25 +109,35 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
         message?.let { snackbarHostState.showSnackbar(it); viewModel.consumeMessage() }
     }
 
+    // البحث بالأيقونة: يفتح حقلًا داخل الترويسة. عند إغلاقه تُمسح مرشّحات رقم الصنف والباركود أيضًا كي لا تبقى مخفية.
+    val search = rememberTopBarSearch(
+        query = data?.filters?.searchQuery.orEmpty(),
+        onQueryChange = viewModel::onSearchQueryChange,
+        placeholder = "بحث بالاسم",
+        onClosed = {
+            viewModel.onItemNumberQueryChange("")
+            viewModel.onBarcodeQueryChange("")
+        }
+    )
+    val scanBarcode: () -> Unit = {
+        startBarcodeScan(
+            context,
+            onResult = { code ->
+                viewModel.onBarcodeQueryChange(code)
+                search.show()
+            }
+        )
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             AppTopBar(
                 title = if (data?.showArchived == true) "الأصناف المؤرشفة" else "المخزون",
                 onBack = { navController.popBackStack() },
+                search = search,
                 actions = {
-                    IconButton(onClick = {
-                        startBarcodeScan(
-                            context,
-                            onResult = { code ->
-                                viewModel.onBarcodeQueryChange(code)
-                                showAdvancedSearch = true
-                            }
-                        )
-                    }) { Icon(Icons.Filled.QrCodeScanner, contentDescription = "مسح الباركود") }
-                    IconButton(onClick = { showAdvancedSearch = !showAdvancedSearch }) {
-                        Icon(Icons.Filled.Search, contentDescription = "بحث برقم الصنف / الباركود")
-                    }
+                    IconButton(onClick = scanBarcode) { Icon(Icons.Filled.QrCodeScanner, contentDescription = "مسح الباركود") }
                     IconButton(onClick = { showFilterSheet = true }) {
                         Icon(Icons.Filled.FilterList, contentDescription = "الفرز والفلاتر")
                     }
@@ -161,25 +169,31 @@ fun InventoryScreen(navController: NavController, viewModel: InventoryViewModel 
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             StateContent(state = uiState, onRetry = {}) { d ->
                 Column(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
-                        SearchField(value = d.filters.searchQuery, onValueChange = viewModel::onSearchQueryChange)
-                        if (showAdvancedSearch) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(
-                                    value = d.filters.itemNumberQuery,
-                                    onValueChange = viewModel::onItemNumberQueryChange,
-                                    label = { Text("رقم الصنف") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
-                                )
-                                OutlinedTextField(
-                                    value = d.filters.barcodeQuery,
-                                    onValueChange = viewModel::onBarcodeQueryChange,
-                                    label = { Text("الباركود") },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
-                                )
-                            }
+                    // البحث بالاسم في الترويسة نفسها (أيقونة فقط)، وأثناء البحث يظهر صفّ رقم الصنف والباركود.
+                    if (search.isOpen) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = d.filters.itemNumberQuery,
+                                onValueChange = viewModel::onItemNumberQueryChange,
+                                label = { Text("رقم الصنف") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = d.filters.barcodeQuery,
+                                onValueChange = viewModel::onBarcodeQueryChange,
+                                label = { Text("الباركود") },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                trailingIcon = {
+                                    IconButton(onClick = scanBarcode) {
+                                        Icon(Icons.Filled.QrCodeScanner, contentDescription = "مسح الباركود")
+                                    }
+                                }
+                            )
                         }
                     }
 

@@ -76,6 +76,10 @@ class GoalRepositoryImpl @Inject constructor(
         )
         return goalId
     }
+
+    override suspend fun deleteGoal(goalId: Long) {
+        goalDao.deleteGoal(goalId)
+    }
 }
 
 private suspend fun GoalWithCommissions.toDomain(productDao: ProductDao): Goal {

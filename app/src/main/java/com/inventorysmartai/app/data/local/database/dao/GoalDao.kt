@@ -32,4 +32,8 @@ interface GoalDao {
 
     @Insert
     suspend fun insertCommissions(commissions: List<CommissionEntity>)
+
+    /** مجموعات العمولة (commissions) تُحذف معه تلقائيًا: المفتاح الأجنبي onDelete = CASCADE. */
+    @Query("DELETE FROM goals WHERE id = :goalId")
+    suspend fun deleteGoal(goalId: Long)
 }

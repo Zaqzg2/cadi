@@ -43,7 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
-import com.inventorysmartai.app.core.designsystem.component.SearchField
+import com.inventorysmartai.app.core.designsystem.component.rememberTopBarSearch
 import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
 import com.inventorysmartai.app.core.designsystem.component.LongPressCard
@@ -65,12 +65,18 @@ fun PartyListScreen(navController: NavController, viewModel: PartyListViewModel 
     var pendingDelete by remember { mutableStateOf<PartyItemUi?>(null) }
 
     LaunchedEffect(message) { message?.let { snackbarHost.showSnackbar(it); viewModel.onMessageShown() } }
+    val search = rememberTopBarSearch(
+        query = query,
+        onQueryChange = viewModel::onQueryChange,
+        placeholder = "بحث بالاسم أو الهاتف أو الرقم"
+    )
 
     Scaffold(
         topBar = {
             AppTopBar(
                 title = if (archived) "${viewModel.kind.titleAr} — المؤرشفة" else viewModel.kind.titleAr,
                 onBack = { navController.popBackStack() },
+                search = search,
                 actions = {
                     IconButton(onClick = viewModel::toggleArchived) {
                         Icon(
@@ -91,12 +97,6 @@ fun PartyListScreen(navController: NavController, viewModel: PartyListViewModel 
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
-            SearchField(
-                value = query,
-                onValueChange = viewModel::onQueryChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = "بحث بالاسم أو الهاتف أو الرقم"
-            )
             StateContent(
                 state = uiState,
                 onRetry = {},
