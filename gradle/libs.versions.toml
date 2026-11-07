@@ -28,6 +28,9 @@ hilt = "2.58"
 hiltNavigationCompose = "1.3.0"
 room = "2.8.4"
 datastore = "1.1.3"
+# Background jobs: the daily stock alerts and the optional automatic backup. 2.10.0 is the release that merged the Kotlin
+# extensions into the main artifact (work-runtime-ktx stays published as a thin wrapper), and needs nothing newer than compileSdk 35.
+work = "2.10.0"
 coroutines = "1.10.1"
 # Phase 3: reads .xlsx. Verified on Maven Central (org.dhatim:fastexcel-reader) — Apache POI is
 # only a `test`-scope dependency of this artifact, not pulled in at runtime, and it depends only
@@ -81,6 +84,8 @@ androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = 
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 

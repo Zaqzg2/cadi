@@ -19,7 +19,7 @@ private data class BottomNavItem(val route: String, val label: String, val icon:
 /** الأقسام الثلاثة التي تجمعها صفحة «المخزون»: تُظهر تبويب المخزون مفعّلًا. */
 private val stockGroup = setOf(
     Destination.Stock.route, Destination.Inventory.route, Destination.InventoryFiltered.route,
-    Destination.CountingList.route, Destination.PurchaseList.route
+    Destination.CountingList.route, Destination.PurchaseList.route, Destination.StockOperations.route
 )
 /** المسارات التي لها تبويب خاص: ما عداها من الصفحات الرئيسية (المبيعات، مركز البيانات، المساعد، الإعدادات) يُفعّل «المزيد». */
 private val mainRoutes = stockGroup + setOf(Destination.Home.route, Destination.Goals.route, Destination.Reports.route)
@@ -47,10 +47,11 @@ fun navigateToTab(navController: NavController, route: String) {
     }
 }
 
+/** [canOpen] يخفي التبويبات التي لا يملك المستخدم صلاحيتها (الرئيسية والمزيد مفتوحتان دائمًا). */
 @Composable
-fun BottomNavBar(currentRoute: String?, navController: NavController) {
+fun BottomNavBar(currentRoute: String?, navController: NavController, canOpen: (String) -> Boolean = { true }) {
     NavigationBar {
-        bottomNavItems.forEach { item ->
+        bottomNavItems.filter { canOpen(it.route) }.forEach { item ->
             NavigationBarItem(
                 selected = item.isSelected(currentRoute),
                 onClick = { if (currentRoute != item.route) navigateToTab(navController, item.route) },

@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import com.inventorysmartai.app.core.designsystem.component.StatusPill
 import com.inventorysmartai.app.domain.model.ImportSourceType
 import com.inventorysmartai.app.navigation.Destination
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
@@ -86,8 +85,6 @@ private val operationTiles = listOf(
     OperationTile("الأخطاء", "errors"),
     OperationTile("المقبولة", "completed")
 )
-
-private val externalServices = listOf("Google Drive", "Google Sheets", "Google Docs")
 
 @Composable
 fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewModel = hiltViewModel()) {
@@ -186,19 +183,20 @@ fun DataCenterScreen(navController: NavController, viewModel: DataCenterViewMode
                 }
             }
 
+            // التكامل موجود فعلًا (المساعد يحفظ التقارير في Drive وينشئ Docs/Sheets): البطاقة تفتح شاشة الربط بدل «قريباً».
             item { Text("خدمات خارجية", style = MaterialTheme.typography.titleMedium) }
-            items(externalServices) { service ->
+            item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { viewModel.onExternalServiceTapped(service) }
+                    onClick = { navController.navigate(Destination.GoogleServicesStatus.route) }
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(service, style = MaterialTheme.typography.bodyLarge)
-                        StatusPill(text = "قريباً", color = MaterialTheme.colorScheme.secondary)
+                    Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+                        Text("خدمات Google", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Drive · Sheets · Docs — ربط الحساب وإدارته",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }

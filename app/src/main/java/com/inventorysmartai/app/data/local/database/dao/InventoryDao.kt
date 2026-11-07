@@ -46,6 +46,18 @@ interface InventoryMovementDao {
     @Insert
     suspend fun insert(movement: InventoryMovementEntity): Long
 
+    /** حركات التحويل والمرتجعات فقط (القيم تطابق StockOperationType.referenceType) — يجمّعها StockOperationHistory. */
+    @Query(
+        """SELECT * FROM inventory_movements
+           WHERE referenceType IN ('STOCK_TRANSFER', 'SALES_RETURN', 'PURCHASE_RETURN')
+           ORDER BY createdAt DESC, id DESC"""
+    )
+    fun observeStockOperationMovements(): Flow<List<InventoryMovementEntity>>
+
+    /** آخر رقم عملية من هذا النوع (0 إن لم توجد): الرقم التالي = هذا + 1، داخل نفس المعاملة فلا يتكرر. */
+    @Query("SELECT COALESCE(MAX(referenceId), 0) FROM inventory_movements WHERE referenceType = :referenceType")
+    suspend fun maxReferenceId(referenceType: String): Long
+
     /** Read-only: the movements of one type (a [com.inventorysmartai.app.domain.model.MovementType] name) inside a period — what the
      *  assistant's inbound-vs-sales comparison adds up. */
     @Query("SELECT * FROM inventory_movements WHERE movementType = :movementType AND createdAt BETWEEN :fromDate AND :toDate")

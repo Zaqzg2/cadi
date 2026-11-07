@@ -59,6 +59,10 @@ sealed class Destination(val route: String) {
         fun createRoute(productId: Long) = "inventory/product/$productId"
     }
 
+    /** سجل التحويل بين الفروع ومرتجعات البيع والشراء — تبويب «المخزون» يبقى مفعّلًا. */
+    data object StockOperations : Destination("stock/operations")
+    /** نموذج عملية جديدة (تحويل أو مرتجع): صفحة ثانوية بلا شريط سفلي. */
+    data object StockOperationNew : Destination("stock/operations/new")
     /** قائمة الأهداف — بنفس نمط قائمة الجرد (بطاقات + بحث بالأيقونة + زر +). تبويب رئيسي في الشريط السفلي. */
     data object Goals : Destination("goals")
     /** نموذج هدف واحد (إضافة أو تعديل) — مثل تفاصيل الجرد: صفحة ثانوية بلا شريط سفلي. */
@@ -140,6 +144,12 @@ sealed class Destination(val route: String) {
     data object SettingsInventory : Destination("settings/inventory_settings")
     // --- Phase 4 ---
     data object GoogleServicesStatus : Destination("settings/google_services")
+    /** النسخ الاحتياطي والاستعادة (ونقل البيانات بين الأجهزة) — بدل الشاشتين المؤقتتين «النسخ الاحتياطي» و«المزامنة». */
+    data object Backup : Destination("settings/backup")
+    /** التنبيه اليومي بحالة المخزون (إشعار خارج التطبيق). */
+    data object StockAlerts : Destination("settings/stock_alerts")
+    /** المستخدمون والأدوار وقفل التطبيق — بدل الشاشة المؤقتة «الصلاحيات». */
+    data object Permissions : Destination("settings/permissions")
     data object AiProviders : Destination("settings/ai_providers")
     data object SettingsPlaceholder : Destination("settings/placeholder/{key}") {
         const val ARG_KEY = "key"
@@ -157,7 +167,7 @@ sealed class Destination(val route: String) {
         val topLevelRoutes: Set<String> by lazy {
             setOf(
                 Home.route, Stock.route, Inventory.route, InventoryFiltered.route, Goals.route, CountingList.route, PurchaseList.route,
-                SalesList.route, Reports.route, DataCenter.route, AiAssistant.route, Settings.route, More.route
+                StockOperations.route, SalesList.route, Reports.route, DataCenter.route, AiAssistant.route, Settings.route, More.route
             )
         }
     }

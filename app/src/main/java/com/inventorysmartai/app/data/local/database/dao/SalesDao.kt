@@ -39,10 +39,19 @@ interface SalesDao {
     @Query("DELETE FROM sales_invoices WHERE id = :id")
     suspend fun deleteInvoice(id: Long)
 
+    /**
+     * المباع الفعلي لصنف في فترة: **الفواتير المؤكَّدة فقط**. المسوّدة لم تنقص من المخزون بعد والملغاة لم تحدث،
+     * فلا تُحتسب إنجازًا ولا عمولة (وهذا ما يعدّه المساعد أيضًا، فتتطابق الأرقام بين الشاشات).
+     */
     @Query("""
         SELECT COALESCE(SUM(sii.quantity), 0.0) FROM sales_invoice_items sii
         INNER JOIN sales_invoices si ON si.id = sii.salesInvoiceId
-        WHERE sii.productId = :productId AND si.invoiceDate BETWEEN :fromDate AND :toDate
+        WHERE sii.productId = :productId AND si.status = 'CONFIRMED'
+          AND si.invoiceDate BETWEEN :fromDate AND :toDate
     """)
     suspend fun getSoldQuantity(productId: Long, fromDate: Long, toDate: Long): Double
+
+    /** يتغيّر عند أي تعديل في الفواتير: يُستعمل كمحفّز لإعادة حساب نسبة الأهداف بعد كل بيع مؤكَّد. */
+    @Query("SELECT COUNT(*) FROM sales_invoices WHERE status = 'CONFIRMED'")
+    fun observeConfirmedInvoiceCount(): Flow<Int>
 }

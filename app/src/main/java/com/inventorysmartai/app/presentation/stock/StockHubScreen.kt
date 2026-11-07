@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
@@ -45,6 +46,7 @@ import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 import com.inventorysmartai.app.core.designsystem.theme.LocalInventoryStatusColors
 import com.inventorysmartai.app.domain.repository.CountingRepository
 import com.inventorysmartai.app.domain.repository.PurchaseRepository
+import com.inventorysmartai.app.domain.repository.StockOperationRepository
 import com.inventorysmartai.app.domain.usecase.GetDashboardSummaryUseCase
 import com.inventorysmartai.app.navigation.Destination
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -56,25 +58,27 @@ import javax.inject.Inject
 
 data class StockHubState(
     val items: Int = 0, val low: Int = 0, val nearExpiry: Int = 0, val expired: Int = 0,
-    val counts: Int = 0, val requests: Int = 0
+    val counts: Int = 0, val requests: Int = 0, val operations: Int = 0
 )
 
 @HiltViewModel
 class StockHubViewModel @Inject constructor(
     getDashboardSummary: GetDashboardSummaryUseCase,
     countingRepository: CountingRepository,
-    purchaseRepository: PurchaseRepository
+    purchaseRepository: PurchaseRepository,
+    stockOperationRepository: StockOperationRepository
 ) : ViewModel() {
     val state: StateFlow<StockHubState> = combine(
         getDashboardSummary(Constants.RECENT_LIST_LIMIT),
         countingRepository.observeCounts(),
-        purchaseRepository.observeRequests()
-    ) { d, counts, requests ->
-        StockHubState(d.totalItems, d.lowStockCount, d.nearExpiryCount, d.expiredCount, counts.size, requests.size)
+        purchaseRepository.observeRequests(),
+        stockOperationRepository.observeOperations()
+    ) { d, counts, requests, operations ->
+        StockHubState(d.totalItems, d.lowStockCount, d.nearExpiryCount, d.expiredCount, counts.size, requests.size, operations.size)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), StockHubState())
 }
 
-/** صفحة واحدة بثلاث بطاقات: المخزون · الجرد · الشراء — الضغط على البطاقة يفتح القسم، والزر ينشئ جديدًا مباشرة. */
+/** صفحة واحدة بأربع بطاقات: المخزون · الجرد · الشراء · التحويل والمرتجعات — الضغط على البطاقة يفتح القسم، والزر ينشئ جديدًا مباشرة. */
 @Composable
 fun StockHubScreen(navController: NavController, viewModel: StockHubViewModel = hiltViewModel()) {
     val s by viewModel.state.collectAsStateWithLifecycle()
@@ -110,6 +114,13 @@ fun StockHubScreen(navController: NavController, viewModel: StockHubViewModel = 
                 actionLabel = "طلب شراء جديد",
                 onOpen = { navController.navigate(Destination.PurchaseList.route) },
                 onAction = { navController.navigate(Destination.PurchaseDetail.createRoute()) }
+            )
+            HubCard(
+                title = "التحويل والمرتجعات", icon = Icons.Filled.SwapHoriz, accent = scheme.error,
+                stats = listOf(Stat("العمليات", s.operations, scheme.error)),
+                actionLabel = "عملية جديدة",
+                onOpen = { navController.navigate(Destination.StockOperations.route) },
+                onAction = { navController.navigate(Destination.StockOperationNew.route) }
             )
         }
     }

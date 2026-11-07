@@ -5,6 +5,8 @@ import com.inventorysmartai.app.domain.importing.ImportMappingTemplate
 import com.inventorysmartai.app.domain.importing.ImportType
 import com.inventorysmartai.app.domain.importing.PipelineAnalysisResult
 import com.inventorysmartai.app.domain.model.*
+import com.inventorysmartai.app.domain.stockops.StockOperation
+import com.inventorysmartai.app.domain.stockops.StockOperationRequest
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -263,3 +265,15 @@ data class ImportApprovalResult(
     val failedRows: Int,
     val errorMessage: String? = null
 )
+
+/** التحويل بين الفروع ومرتجعات البيع والشراء: عمليات تغيّر الأرصدة وتُسجَّل في سجل الحركات دون فاتورة. */
+interface StockOperationRepository {
+    /** سجل العمليات (الأحدث أولًا)، مجمَّعة من حركات المخزون. */
+    fun observeOperations(): Flow<List<StockOperation>>
+
+    /**
+     * ينفّذ العملية كاملة أو لا شيء (معاملة واحدة) ويعيد رقمها. يرمي InvalidStockOperationException لطلب غير صالح،
+     * وInsufficientStockException إن لم يكفِ رصيد ما سيخرج من الفرع (فلا يُترك أثر جزئي).
+     */
+    suspend fun execute(request: StockOperationRequest): Long
+}

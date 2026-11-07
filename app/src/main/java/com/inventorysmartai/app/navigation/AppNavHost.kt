@@ -48,6 +48,9 @@ import com.inventorysmartai.app.presentation.datacenter.importflow.ImportFlowVie
 import com.inventorysmartai.app.presentation.datacenter.importflow.ImportReviewScreen
 import com.inventorysmartai.app.presentation.datacenter.importflow.ImportSetupScreen
 import com.inventorysmartai.app.presentation.datacenter.importflow.ImportSheetSelectScreen
+import com.inventorysmartai.app.presentation.access.AccessDeniedOverlay
+import com.inventorysmartai.app.presentation.access.AccessGateViewModel
+import com.inventorysmartai.app.presentation.access.PermissionsScreen
 import com.inventorysmartai.app.presentation.goals.GoalDetailScreen
 import com.inventorysmartai.app.presentation.goals.GoalsScreen
 import com.inventorysmartai.app.presentation.home.HomeScreen
@@ -63,11 +66,15 @@ import com.inventorysmartai.app.presentation.sales.detail.SalesDetailScreen
 import com.inventorysmartai.app.presentation.sales.list.SalesListScreen
 import com.inventorysmartai.app.presentation.settings.AppInfoScreen
 import com.inventorysmartai.app.presentation.settings.aiproviders.AiProvidersScreen
+import com.inventorysmartai.app.presentation.settings.alerts.StockAlertsScreen
+import com.inventorysmartai.app.presentation.settings.backup.BackupScreen
 import com.inventorysmartai.app.presentation.settings.PlaceholderScreen
 import com.inventorysmartai.app.presentation.settings.SettingsScreen
 import com.inventorysmartai.app.presentation.settings.catalog.CatalogListScreen
 import com.inventorysmartai.app.presentation.settings.inventorysettings.InventorySettingsScreen
 import com.inventorysmartai.app.presentation.stock.StockHubScreen
+import com.inventorysmartai.app.presentation.stockops.StockOperationFormScreen
+import com.inventorysmartai.app.presentation.stockops.StockOperationsScreen
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 
@@ -81,6 +88,13 @@ fun AppNavHost() {
     // أسفل الصفحة، فيظهر فراغ بين خانة الكتابة (مثل خانة المساعد) واللوحة.
     val imeVisible = WindowInsets.isImeVisible
     val showBottomBar = currentRoute in Destination.topLevelRoutes && !imeVisible
+
+    // الصلاحيات تعمل فقط إن فُعّل قفل التطبيق (الافتراضي مطفأ فلا يتغيّر شيء). الشاشة غير المسموحة تُحجب بطبقة فوقها (لا تُستبدل)
+    // فلا يُعاد بناء التنقل، وتُخفى التبويبات التي لا يملكها المستخدم ويُستثنى مثلها من التنقل بالسحب.
+    val gate: AccessGateViewModel = hiltViewModel()
+    val access by gate.state.collectAsStateWithLifecycle()
+    val canOpenCurrent = access.canOpen(currentRoute)
+    val swipeTabs = remember(access) { mainTabRoutes.filter { access.canOpen(it) } }
 
     // The assistant drives the app through this bridge: its tools only post a command, and this is the one place that navigates.
     val shell: AppShellViewModel = hiltViewModel()
@@ -96,7 +110,7 @@ fun AppNavHost() {
     }
 
     Scaffold(
-        bottomBar = { if (showBottomBar) BottomNavBar(currentRoute, navController) }
+        bottomBar = { if (showBottomBar) BottomNavBar(currentRoute, navController, canOpen = { access.canOpen(it) }) }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             NavHost(
@@ -107,14 +121,14 @@ fun AppNavHost() {
                 modifier = Modifier.padding(innerPadding).consumeWindowInsets(innerPadding).then(
                     // سحب أفقي على مساحة فارغة = الانتقال للتبويب المجاور. الجداول والبطاقات القابلة للسحب
                     // تستهلك الإيماءة أولًا فلا يحدث تعارض.
-                    if (currentRoute in mainTabRoutes) Modifier.pointerInput(currentRoute) {
+                    if (currentRoute in swipeTabs) Modifier.pointerInput(currentRoute, swipeTabs) {
                         var total = 0f
                         detectHorizontalDragGestures(
                             onDragStart = { total = 0f },
                             onDragEnd = {
-                                val i = mainTabRoutes.indexOf(currentRoute)
+                                val i = swipeTabs.indexOf(currentRoute)
                                 val target = when { total > 160f -> i + 1; total < -160f -> i - 1; else -> i }
-                                if (target != i && target in mainTabRoutes.indices) navigateToTab(navController, mainTabRoutes[target])
+                                if (target != i && target in swipeTabs.indices) navigateToTab(navController, swipeTabs[target])
                             },
                             onHorizontalDrag = { _, dx -> total += dx }
                         )
@@ -144,6 +158,10 @@ fun AppNavHost() {
                     arguments = listOf(navArgument(Destination.ProductDetail.ARG_PRODUCT_ID) { type = NavType.LongType })
                 ) { ProductDetailScreen(navController) }
 
+                composable(Destination.Backup.route) { BackupScreen(navController) }
+                composable(Destination.StockAlerts.route) { StockAlertsScreen(navController) }
+                composable(Destination.StockOperations.route) { StockOperationsScreen(navController) }
+                composable(Destination.StockOperationNew.route) { StockOperationFormScreen(navController) }
                 composable(Destination.Goals.route) { GoalsScreen(navController) }
                 composable(
                     Destination.GoalDetail.route,
@@ -237,6 +255,7 @@ fun AppNavHost() {
                 ) { CatalogListScreen(navController) }
                 composable(Destination.SettingsInventory.route) { InventorySettingsScreen(navController) }
                 composable(Destination.GoogleServicesStatus.route) { GoogleServicesStatusScreen(navController) }
+                composable(Destination.Permissions.route) { PermissionsScreen(navController) }
                 composable(Destination.AiProviders.route) { AiProvidersScreen(navController) }
                 composable(
                     Destination.SettingsPlaceholder.route,
@@ -245,6 +264,14 @@ fun AppNavHost() {
                     val key = backStackEntry.arguments?.getString(Destination.SettingsPlaceholder.ARG_KEY).orEmpty()
                     PlaceholderScreen(navController, key)
                 }
+            }
+
+            // شاشة لا يملك المستخدم صلاحيتها: تُغطّى بدل أن تُعرض، والشريط السفلي يبقى متاحًا للانتقال إلى ما هو مسموح.
+            if (!canOpenCurrent) {
+                AccessDeniedOverlay(
+                    onHome = { navigateToTab(navController, Destination.Home.route) },
+                    modifier = Modifier.padding(innerPadding)
+                )
             }
 
             // The assistant's answer, shown over the screen it opened for the person (the chat itself shows it when it is on screen).

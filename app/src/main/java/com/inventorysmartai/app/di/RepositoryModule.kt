@@ -25,6 +25,7 @@ import com.inventorysmartai.app.data.repository.PurchaseRepositoryImpl
 import com.inventorysmartai.app.data.repository.ReportsRepositoryImpl
 import com.inventorysmartai.app.data.repository.SalesRepositoryImpl
 import com.inventorysmartai.app.data.repository.SettingsRepositoryImpl
+import com.inventorysmartai.app.data.repository.StockOperationRepositoryImpl
 import com.inventorysmartai.app.domain.assistant.LocalToolExecutor
 import com.inventorysmartai.app.domain.importing.ColumnMapper
 import com.inventorysmartai.app.domain.importing.DefaultColumnMapper
@@ -56,6 +57,7 @@ import com.inventorysmartai.app.domain.repository.PurchaseRepository
 import com.inventorysmartai.app.domain.repository.ReportsRepository
 import com.inventorysmartai.app.domain.repository.SalesRepository
 import com.inventorysmartai.app.domain.repository.SettingsRepository
+import com.inventorysmartai.app.domain.repository.StockOperationRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -74,6 +76,7 @@ abstract class RepositoryModule {
     @Binds @Singleton abstract fun bindSalesRepository(impl: SalesRepositoryImpl): SalesRepository
     @Binds @Singleton abstract fun bindReportsRepository(impl: ReportsRepositoryImpl): ReportsRepository
     @Binds @Singleton abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+    @Binds @Singleton abstract fun bindStockOperationRepository(impl: StockOperationRepositoryImpl): StockOperationRepository
     @Binds @Singleton abstract fun bindAttachmentRepository(impl: AttachmentRepositoryImpl): AttachmentRepository
     @Binds @Singleton abstract fun bindImportRepository(impl: ImportRepositoryImpl): ImportRepository
     @Binds @Singleton abstract fun bindProductMatcher(impl: DeterministicProductMatcher): ProductMatcher

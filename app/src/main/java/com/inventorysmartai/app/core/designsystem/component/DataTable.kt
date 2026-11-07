@@ -3,6 +3,7 @@ package com.inventorysmartai.app.core.designsystem.component
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -38,11 +41,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -54,8 +59,9 @@ import androidx.compose.ui.unit.dp
  * One column of a [DataTable].
  * - [text] renders the cell (also what an editable cell starts from).
  * - [comparator] makes the header tappable for sorting (tap again to reverse).
- * - [onEdit] makes the cell editable in place (tap, type, Done / leave the cell to commit).
- *   Return value of the callback is ignored; validate in the ViewModel and update the row list.
+ * - [onEdit] makes the cell editable in place: tap, type, then **Enter** commits and moves straight to the same column of
+ *   the next row (type down a column without touching the screen between values). On the last row Enter just finishes, and
+ *   leaving the cell commits too. Return value of the callback is ignored; validate in the ViewModel and update the row list.
  */
 class TableColumn<T>(
     val title: String,
@@ -94,10 +100,17 @@ fun <T> DataTable(
     var sortColumn by remember { mutableStateOf<Int?>(null) }
     var ascending by remember { mutableStateOf(true) }
     var editing by remember { mutableStateOf<Pair<Any, Int>?>(null) }
+    val listState = rememberLazyListState()
 
     val sortedRows = remember(rows, sortColumn, ascending, columns) {
         val cmp = sortColumn?.let { columns.getOrNull(it)?.comparator }
         if (cmp == null) rows else rows.sortedWith(if (ascending) cmp else cmp.reversed())
+    }
+
+    // Enter moves editing to the next row: scroll only as far as needed so that row is on screen (and above the keyboard).
+    LaunchedEffect(editing) {
+        val key = editing?.first ?: return@LaunchedEffect
+        listState.ensureVisible(sortedRows.indexOfFirst { rowKey(it) == key })
     }
 
     val selectionEnabled = onSelectionChange != null
@@ -156,7 +169,7 @@ fun <T> DataTable(
             }
 
             // ---- body ----
-            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth()) {
                 itemsIndexed(sortedRows, key = { _, r -> rowKey(r) }) { position, row ->
                     val key = rowKey(row)
                     val isSelected = key in selectedKeys
@@ -203,12 +216,17 @@ fun <T> DataTable(
                         columns.forEachIndexed { index, col ->
                             val isEditing = editing == (key to index)
                             if (col.onEdit != null && isEditing) {
+                                // The row below is decided now, from what is on screen, before the edit can re-sort anything.
+                                val nextKey = sortedRows.getOrNull(position + 1)?.let(rowKey)
                                 EditableCell(
                                     initial = col.text(row),
                                     width = col.width,
                                     numeric = col.numeric,
-                                    onCommit = { newText ->
-                                        editing = null
+                                    hasNext = nextKey != null,
+                                    onCommit = { newText, advance ->
+                                        // Only the cell still being edited may change the target: a late commit from a cell that
+                                        // was already replaced must not cancel the move to the next one.
+                                        if (editing == (key to index)) editing = if (advance && nextKey != null) nextKey to index else null
                                         if (newText != col.text(row)) col.onEdit.invoke(row, newText)
                                     }
                                 )
@@ -275,12 +293,32 @@ private fun HeaderCell(title: String, width: Dp, sortArrow: Boolean?, clickable:
     }
 }
 
+/**
+ * The cell being typed in. The keyboard's action key is **Next** while there is a row below (Enter moves down the same column),
+ * and **Done** on the last row. [onCommit] gets `advance = true` only for Enter-to-next.
+ *
+ * It commits exactly once: Enter commits and the cell is then removed (which also drops its focus), so the focus-loss path must
+ * not commit a second time — that second call would cancel the move to the next row.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun EditableCell(initial: String, width: Dp, numeric: Boolean, onCommit: (String) -> Unit) {
+private fun EditableCell(initial: String, width: Dp, numeric: Boolean, hasNext: Boolean, onCommit: (text: String, advance: Boolean) -> Unit) {
     var text by remember { mutableStateOf(initial) }
     var hadFocus by remember { mutableStateOf(false) }
+    var finished by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // show() as well: moving down replaces this field with the next one, and the keyboard must stay up through the swap.
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
+
+    fun finish(advance: Boolean) {
+        if (finished) return
+        finished = true
+        onCommit(text.trim(), advance)
+    }
 
     BasicTextField(
         value = text,
@@ -290,9 +328,9 @@ private fun EditableCell(initial: String, width: Dp, numeric: Boolean, onCommit:
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         keyboardOptions = KeyboardOptions(
             keyboardType = if (numeric) KeyboardType.Decimal else KeyboardType.Text,
-            imeAction = ImeAction.Done
+            imeAction = if (hasNext) ImeAction.Next else ImeAction.Done
         ),
-        keyboardActions = KeyboardActions(onDone = { onCommit(text.trim()) }),
+        keyboardActions = KeyboardActions(onNext = { finish(advance = true) }, onDone = { finish(advance = false) }),
         modifier = Modifier
             .width(width)
             .padding(horizontal = 4.dp)
@@ -301,9 +339,34 @@ private fun EditableCell(initial: String, width: Dp, numeric: Boolean, onCommit:
             .focusRequester(focusRequester)
             .onFocusChanged { state ->
                 if (state.isFocused) hadFocus = true
-                else if (hadFocus) onCommit(text.trim()) // leaving the cell commits (never silently drops typing)
+                else if (hadFocus) finish(advance = false) // leaving the cell commits (never silently drops typing)
             }
     )
+}
+
+/** يمرّر القائمة بأقل قدر يكفي لتصير الصفوف الهدف مرئية بالكامل (لا قفز إلى أعلى القائمة في كل مرة). */
+private suspend fun LazyListState.ensureVisible(index: Int) {
+    if (index < 0) return
+    val info = layoutInfo
+    val item = info.visibleItemsInfo.firstOrNull { it.index == index }
+    if (item == null) {
+        animateScrollToItem(index) // not composed at all yet: jump close, the next pass fine-tunes
+        return
+    }
+    val delta = ScrollReveal.deltaToReveal(item.offset, item.size, info.viewportStartOffset, info.viewportEndOffset)
+    if (delta != 0) animateScrollBy(delta.toFloat())
+}
+
+internal object ScrollReveal {
+    /**
+     * كم نمرّر (موجب = نحو النهاية) كي يقع عنصر موضعه [offset] وحجمه [size] داخل النافذة [viewportStart]..[viewportEnd]؟
+     * 0 إن كان داخلها أصلًا. وإن كان العنصر أطول من النافذة نحاذي رأسه برأسها بدل أن نقصّه من أعلى.
+     */
+    fun deltaToReveal(offset: Int, size: Int, viewportStart: Int, viewportEnd: Int): Int = when {
+        offset < viewportStart -> offset - viewportStart
+        offset + size > viewportEnd -> minOf(offset + size - viewportEnd, offset - viewportStart)
+        else -> 0
+    }
 }
 
 /**

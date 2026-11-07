@@ -12,6 +12,8 @@
       the file picker (SAF) needs no storage permission either.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Daily stock alerts (near expiry / low stock). Runtime-granted on Android 13+; the alerts switch asks for it. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".InventorySmartApp"

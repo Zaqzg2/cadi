@@ -6,11 +6,14 @@ import com.inventorysmartai.app.data.local.database.dao.SalesDao
 import com.inventorysmartai.app.data.local.database.entity.CommissionEntity
 import com.inventorysmartai.app.data.local.database.entity.GoalEntity
 import com.inventorysmartai.app.data.local.database.relation.GoalWithCommissions
+import com.inventorysmartai.app.domain.goals.GoalTargetSnapshot
+import com.inventorysmartai.app.domain.goals.OverallGoalProgress
 import com.inventorysmartai.app.domain.model.CommissionGroup
 import com.inventorysmartai.app.domain.model.CommissionType
 import com.inventorysmartai.app.domain.model.Goal
 import com.inventorysmartai.app.domain.repository.GoalRepository
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,21 +34,33 @@ class GoalRepositoryImpl @Inject constructor(
     override fun observeGoalForProduct(productId: Long): Flow<Goal?> =
         goalDao.observeLatestForProduct(productId).map { it?.toDomain(productDao) }
 
-    /** Sums achieved-vs-target across every goal — the real sales data behind "نسبة تحقيق
-     *  الأهداف" on the dashboard, not a placeholder percentage. */
+    /**
+     * "نسبة تحقيق الأهداف" في الرئيسية: المحقق الفعلي (فواتير مؤكَّدة) ÷ المستهدف لأهداف **الشهر الجاري** فقط،
+     * صفّ واحد لكل صنف. تُعاد الحسبة عند تغيّر الأهداف **وعند أي بيع مؤكَّد جديد** (كانت تتجمّد بعد آخر تعديل للأهداف).
+     */
     override fun observeOverallAchievementPercent(): Flow<Double> =
-        goalDao.observeAllWithCommissions().map { goals ->
-            if (goals.isEmpty()) return@map 0.0
-            var totalTarget = 0.0
-            var totalAchieved = 0.0
-            for (g in goals) {
-                val target = g.commissions.sumOf { it.targetQuantity }
-                val achieved = salesDao.getSoldQuantity(g.goal.productId, g.goal.periodStart, g.goal.periodEnd)
-                totalTarget += target
-                totalAchieved += achieved
+        combine(goalDao.observeAllWithCommissions(), salesDao.observeConfirmedInvoiceCount()) { goals, _ -> goals }
+            .map { goals ->
+                val current = OverallGoalProgress.currentGoals(
+                    goals = goals.map {
+                        GoalTargetSnapshot(
+                            id = it.goal.id,
+                            productId = it.goal.productId,
+                            periodStart = it.goal.periodStart,
+                            periodEnd = it.goal.periodEnd,
+                            targetQuantity = it.commissions.sumOf { c -> c.targetQuantity }
+                        )
+                    },
+                    now = System.currentTimeMillis()
+                )
+                var totalTarget = 0.0
+                var totalAchieved = 0.0
+                for (g in current) {
+                    totalTarget += g.targetQuantity
+                    totalAchieved += salesDao.getSoldQuantity(g.productId, g.periodStart, g.periodEnd)
+                }
+                OverallGoalProgress.percent(totalTarget, totalAchieved)
             }
-            if (totalTarget <= 0.0) 0.0 else (totalAchieved / totalTarget * 100).coerceIn(0.0, 100.0)
-        }
 
     override suspend fun saveGoal(goal: Goal): Long {
         val now = System.currentTimeMillis()

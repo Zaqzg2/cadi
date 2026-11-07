@@ -1,10 +1,12 @@
 package com.inventorysmartai.app.presentation.reports
 
 import android.content.Context
+import android.content.Intent
 import android.print.PrintAttributes
 import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,8 +26,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -50,9 +56,13 @@ import com.inventorysmartai.app.core.common.UiState
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.theme.LocalInventoryStatusColors
+import com.inventorysmartai.app.data.assistant.files.FileNames
+import com.inventorysmartai.app.data.assistant.files.XlsxWriter
 import com.inventorysmartai.app.domain.model.InventoryStatus
 import com.inventorysmartai.app.domain.model.ProductStockSummary
 import com.inventorysmartai.app.domain.model.CountStatus
+import com.inventorysmartai.app.domain.reports.ReportCsv
+import java.io.File
 
 private val reportTiles = listOf(
     ReportType.INVENTORY to "المخزون",
@@ -67,7 +77,24 @@ private val reportTiles = listOf(
     ReportType.GOALS to "الأهداف"
 )
 
-private class ReportTable(val title: String, val headers: List<String>, val rows: List<List<String>>)
+/**
+ * [rows] تحمل القيم الحقيقية (أرقام وتواريخ نصية): للتصدير إلى Excel/CSV حيث يجب أن تبقى الأرقام أرقامًا قابلة للجمع.
+ * [displayRows] هي نفسها منسّقة للشاشة والطباعة.
+ */
+private class ReportTable(val title: String, val headers: List<String>, val rows: List<List<Any>>) {
+    val displayRows: List<List<String>> by lazy { rows.map { row -> row.map(::cellText) } }
+}
+
+private fun cellText(value: Any): String = when (value) {
+    is Double -> Formatters.formatNumber(value)
+    is Int -> Formatters.formatInt(value)
+    else -> value.toString()
+}
+
+private enum class ExportFormat(val extension: String, val mime: String) {
+    XLSX("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    CSV("csv", "text/csv")
+}
 
 /** لوحة تحكم: مؤشرات + توزيع الحالات + مخططات 30 يومًا، ثم جدول التقرير المختار القابل للطباعة. */
 @Composable
@@ -75,11 +102,27 @@ fun ReportsScreen(navController: NavController, viewModel: ReportsViewModel = hi
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var selected by rememberSaveable { mutableStateOf(ReportType.INVENTORY) }
+    var exportMenuOpen by rememberSaveable { mutableStateOf(false) }
     val data = (uiState as? UiState.Success)?.data
     val table = data?.let { buildTable(selected, it) }
 
     Scaffold(topBar = {
         AppTopBar(title = "التقارير", actions = {
+            Box {
+                IconButton(enabled = table != null, onClick = { exportMenuOpen = true }) {
+                    Icon(Icons.Filled.Share, contentDescription = "تصدير الجدول")
+                }
+                DropdownMenu(expanded = exportMenuOpen, onDismissRequest = { exportMenuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Excel (.xlsx)") },
+                        onClick = { exportMenuOpen = false; table?.let { shareTable(context, it, ExportFormat.XLSX) } }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("CSV — لبرامج أخرى") },
+                        onClick = { exportMenuOpen = false; table?.let { shareTable(context, it, ExportFormat.CSV) } }
+                    )
+                }
+            }
             IconButton(enabled = table != null, onClick = { table?.let { printTable(context, it) } }) {
                 Icon(Icons.Filled.Print, contentDescription = "طباعة الجدول")
             }
@@ -106,7 +149,7 @@ fun ReportsScreen(navController: NavController, viewModel: ReportsViewModel = hi
                             Text("${table.title} — ${Formatters.formatInt(table.rows.size)} صف", style = MaterialTheme.typography.titleSmall)
                         }
                         item { TableHeader(table.headers) }
-                        itemsIndexed(table.rows) { i, row -> TableRow(row, i) }
+                        itemsIndexed(table.displayRows) { i, row -> TableRow(row, i) }
                     }
                 }
             }
@@ -202,8 +245,8 @@ private fun buildTable(type: ReportType, d: ReportsData): ReportTable? {
     fun products(filter: (ProductStockSummary) -> Boolean) = ReportTable(
         title, listOf("#", "الصنف", "الكمية", "الحد الأدنى", "الحالة", "الانتهاء"),
         d.products.filter(filter).mapIndexed { i, p ->
-            listOf(
-                (i + 1).toString(), p.product.name, Formatters.formatNumber(p.totalQuantity), Formatters.formatNumber(p.product.minStock),
+            listOf<Any>(
+                i + 1, p.product.name, p.totalQuantity, p.product.minStock,
                 statusLabel(p.status), p.nearestExpiryDate?.let { Formatters.formatDate(it) } ?: "—"
             )
         }
@@ -211,7 +254,7 @@ private fun buildTable(type: ReportType, d: ReportsData): ReportTable? {
     fun days(series: List<Pair<Long, Double>>) = ReportTable(
         title, listOf("اليوم", "الإجمالي"),
         series.map { (day, total) ->
-            listOf(Formatters.formatDate(if (day > 100_000_000_000L) day else day * 86_400_000L), Formatters.formatNumber(total))
+            listOf<Any>(Formatters.formatDate(if (day > 100_000_000_000L) day else day * 86_400_000L), total)
         }
     )
     return when (type) {
@@ -225,23 +268,23 @@ private fun buildTable(type: ReportType, d: ReportsData): ReportTable? {
         ReportType.BRANCHES -> ReportTable(
             title, listOf("الفرع", "عدد البنود", "إجمالي الكمية"),
             d.products.flatMap { it.branchStocks }.groupBy { it.branchName }.map { (name, list) ->
-                listOf(name, Formatters.formatInt(list.size), Formatters.formatNumber(list.sumOf { it.quantity }))
+                listOf<Any>(name, list.size, list.sumOf { it.quantity })
             }
         )
         ReportType.COUNTING -> ReportTable(
             title, listOf("#", "التاريخ", "الفرع", "الحالة", "الأصناف", "بها فرق"),
             d.counts.mapIndexed { i, c ->
-                listOf(
-                    (i + 1).toString(), Formatters.formatDate(c.countDate), c.branchName ?: "—", countStatusLabel(c.status),
-                    Formatters.formatInt(c.items.size), Formatters.formatInt(c.items.count { it.difference != 0.0 })
+                listOf<Any>(
+                    i + 1, Formatters.formatDate(c.countDate), c.branchName ?: "—", countStatusLabel(c.status),
+                    c.items.size, c.items.count { it.difference != 0.0 }
                 )
             }
         )
         ReportType.GOALS -> ReportTable(
             title, listOf("الصنف", "الهدف الإجمالي", "المجموعات", "الفترة"),
             d.goals.map { g ->
-                listOf(
-                    g.productName ?: "—", Formatters.formatNumber(g.groups.sumOf { it.targetQuantity }), Formatters.formatInt(g.groups.size),
+                listOf<Any>(
+                    g.productName ?: "—", g.groups.sumOf { it.targetQuantity }, g.groups.size,
                     "${Formatters.formatDate(g.periodStart)} – ${Formatters.formatDate(g.periodEnd)}"
                 )
             }
@@ -270,7 +313,7 @@ private fun printTable(context: Context, t: ReportTable) {
         append("<h2>${esc(t.title)}</h2><p>${Formatters.formatDate(System.currentTimeMillis())} — ${t.rows.size}</p><table><tr>")
         t.headers.forEach { append("<th>${esc(it)}</th>") }
         append("</tr>")
-        t.rows.forEach { r -> append("<tr>"); r.forEach { append("<td>${esc(it)}</td>") }; append("</tr>") }
+        t.displayRows.forEach { r -> append("<tr>"); r.forEach { append("<td>${esc(it)}</td>") }; append("</tr>") }
         append("</table></body></html>")
     }
     val web = WebView(context)
@@ -282,4 +325,32 @@ private fun printTable(context: Context, t: ReportTable) {
         }
     }
     web.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+}
+
+/**
+ * يصدّر الجدول المعروض إلى ملف (Excel بأرقام حقيقية أو CSV) في ذاكرة التخزين المؤقت ويفتح قائمة المشاركة
+ * (Drive، واتساب، بريد، حفظ...). يُحذف ما صُدِّر سابقًا أولًا كي لا يتراكم في التخزين.
+ */
+private fun shareTable(context: Context, table: ReportTable, format: ExportFormat) {
+    try {
+        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+        dir.listFiles()?.forEach { it.delete() }
+        val file = File(dir, FileNames.safe(table.title, "تقرير", format.extension))
+        when (format) {
+            ExportFormat.XLSX -> {
+                val sheet = XlsxWriter.SheetSpec(FileNames.safe(table.title, "تقرير", ""), table.headers, table.rows)
+                file.writeBytes(XlsxWriter.write(listOf(sheet), true))
+            }
+            ExportFormat.CSV -> file.writeBytes(ReportCsv.build(table.headers, table.rows).toByteArray(Charsets.UTF_8))
+        }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = format.mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(send, "مشاركة التقرير"))
+    } catch (e: Exception) {
+        Toast.makeText(context, "تعذّر تصدير التقرير: ${e.message ?: "خطأ غير معروف"}", Toast.LENGTH_LONG).show()
+    }
 }

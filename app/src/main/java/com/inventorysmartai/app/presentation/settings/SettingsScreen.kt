@@ -39,10 +39,10 @@ private val catalogRows = listOf(
 )
 
 private val placeholderRows = listOf(
-    SettingsRow("النسخ الاحتياطي", Destination.SettingsPlaceholder.createRoute("backup")),
-    SettingsRow("المزامنة", Destination.SettingsPlaceholder.createRoute("sync")),
+    SettingsRow("النسخ الاحتياطي والمزامنة", Destination.Backup.route),
+    SettingsRow("تنبيهات المخزون", Destination.StockAlerts.route),
     SettingsRow("الحساب وخدمات Google", Destination.GoogleServicesStatus.route),
-    SettingsRow("الصلاحيات", Destination.SettingsPlaceholder.createRoute("permissions")),
+    SettingsRow("الصلاحيات", Destination.Permissions.route),
     SettingsRow("إعدادات الذكاء الاصطناعي", Destination.AiProviders.route)
 )
 

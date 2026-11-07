@@ -42,9 +42,5 @@ class DataCenterViewModel @Inject constructor(
 
     fun onScanResultHandled() { _scanResult.value = null }
 
-    fun onExternalServiceTapped(serviceName: String) {
-        _snackbarMessage.value = "التكامل مع $serviceName قادم قريباً"
-    }
-
     fun onSnackbarShown() { _snackbarMessage.value = null }
 }
