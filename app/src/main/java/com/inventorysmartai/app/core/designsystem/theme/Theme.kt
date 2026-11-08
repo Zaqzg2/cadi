@@ -4,10 +4,13 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 
@@ -108,16 +111,94 @@ private val DarkStatusColors = InventoryStatusColors(
 
 val LocalInventoryStatusColors = staticCompositionLocalOf { LightStatusColors }
 
+/** لون تمييز جاهز في الإعدادات. [hue] = null يعني الأزرق الأصلي للتطبيق. */
+data class AccentPreset(val label: String, val hue: Float?)
+
+val AccentPresets: List<AccentPreset> = listOf(
+    AccentPreset("الأزرق", null),
+    AccentPreset("الفيروزي", 178f),
+    AccentPreset("الأخضر", 148f),
+    AccentPreset("البنفسجي", 268f),
+    AccentPreset("الوردي", 322f),
+    AccentPreset("الأحمر", 352f),
+    AccentPreset("البرتقالي", 24f)
+)
+
+/** لون المعاينة (دائرة الاختيار في الإعدادات) للون التمييز [hue]؛ null = الأزرق الأصلي. */
+fun accentPreviewColor(hue: Float?): Color = if (hue == null) LightColors.primary else readableOnWhite(hue)
+
+private fun hsv(hue: Float, saturation: Float, value: Float): Color =
+    Color(android.graphics.Color.HSVToColor(floatArrayOf(((hue % 360f) + 360f) % 360f, saturation.coerceIn(0f, 1f), value.coerceIn(0f, 1f))))
+
+/** أفتح درجة من اللون [hue] يبقى النص الأبيض فوقها مقروءًا (تباين WCAG ≥ 4.5 تقريبًا). */
+private fun readableOnWhite(hue: Float, saturation: Float = 0.88f): Color {
+    var value = 0.92f
+    var color = hsv(hue, saturation, value)
+    while (color.luminance() > 0.18f && value > 0.25f) {
+        value -= 0.03f
+        color = hsv(hue, saturation, value)
+    }
+    return color
+}
+
+/**
+ * يبني مخطط ألوان كاملًا من درجة لون واحدة: الأساسي والثانوي وحاويات السطوح والخلفية كلها بنفس الأسلوب المستعمل في الأزرق
+ * الافتراضي (أسطح مائلة قليلًا للون). ألوان المعنى (الخطأ، التحذير، حالات المخزون) لا تتغيّر أبدًا.
+ */
+private fun accentScheme(base: ColorScheme, hue: Float, dark: Boolean): ColorScheme {
+    val second = (hue + 315f) % 360f
+    return if (!dark) base.copy(
+        primary = readableOnWhite(hue), onPrimary = Color.White,
+        primaryContainer = hsv(hue, 0.14f, 1f), onPrimaryContainer = hsv(hue, 0.95f, 0.22f),
+        secondary = readableOnWhite(second, 0.8f), onSecondary = Color.White,
+        secondaryContainer = hsv(second, 0.15f, 0.97f), onSecondaryContainer = hsv(second, 0.9f, 0.2f),
+        background = hsv(hue, 0.036f, 0.984f), onBackground = hsv(hue, 0.67f, 0.2f),
+        surface = hsv(hue, 0.036f, 0.984f), onSurface = hsv(hue, 0.67f, 0.2f),
+        surfaceVariant = hsv(hue, 0.073f, 0.96f), onSurfaceVariant = hsv(hue, 0.37f, 0.46f),
+        outline = hsv(hue, 0.22f, 0.68f), outlineVariant = hsv(hue, 0.1f, 0.92f),
+        surfaceContainer = hsv(hue, 0.06f, 0.97f), surfaceContainerHigh = hsv(hue, 0.075f, 0.957f),
+        surfaceContainerHighest = Color.White, surfaceContainerLow = hsv(hue, 0.02f, 0.99f),
+        surfaceContainerLowest = Color.White
+    ) else base.copy(
+        primary = hsv(hue, 0.38f, 1f), onPrimary = hsv(hue, 1f, 0.3f),
+        primaryContainer = hsv(hue, 0.9f, 0.62f), onPrimaryContainer = hsv(hue, 0.14f, 1f),
+        secondary = hsv(second, 0.45f, 0.88f), onSecondary = hsv(second, 1f, 0.22f),
+        secondaryContainer = hsv(second, 1f, 0.31f), onSecondaryContainer = hsv(second, 0.14f, 0.96f),
+        background = hsv(hue, 0.59f, 0.114f), onBackground = hsv(hue, 0.07f, 0.957f),
+        surface = hsv(hue, 0.59f, 0.114f), onSurface = hsv(hue, 0.07f, 0.957f),
+        surfaceVariant = hsv(hue, 0.41f, 0.28f), onSurfaceVariant = hsv(hue, 0.15f, 0.85f),
+        outline = hsv(hue, 0.21f, 0.66f), outlineVariant = hsv(hue, 0.41f, 0.28f),
+        surfaceContainer = hsv(hue, 0.49f, 0.17f), surfaceContainerHigh = hsv(hue, 0.45f, 0.22f),
+        surfaceContainerHighest = hsv(hue, 0.43f, 0.275f), surfaceContainerLow = hsv(hue, 0.53f, 0.15f),
+        surfaceContainerLowest = hsv(hue, 0.61f, 0.09f)
+    )
+}
+
+/** «أسود حقيقي» للوضع الداكن: خلفية سوداء بالكامل (توفّر بطارية شاشات AMOLED) وبطاقات رمادية داكنة جدًا فوقها. */
+private fun ColorScheme.pureBlack(): ColorScheme = copy(
+    background = Color.Black, surface = Color.Black,
+    surfaceContainerLowest = Color.Black, surfaceContainerLow = Color(0xFF080808),
+    surfaceContainer = Color(0xFF101010), surfaceContainerHigh = Color(0xFF181818), surfaceContainerHighest = Color(0xFF212121)
+)
+
 /**
  * App theme root. The app is Arabic-only, so layout direction is forced to RTL here rather
  * than left to follow the device locale — this is deliberate, not a fallback.
+ *
+ * [accentHue] درجة لون التمييز (0..360)، أو null للأزرق الأصلي. [pureBlack] يُطبَّق في الوضع الداكن فقط.
  */
 @Composable
 fun InventorySmartTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    accentHue: Float? = null,
+    pureBlack: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColors else LightColors
+    val colorScheme = remember(darkTheme, accentHue, pureBlack) {
+        val base = if (darkTheme) DarkColors else LightColors
+        val accented = if (accentHue == null) base else accentScheme(base, accentHue, darkTheme)
+        if (darkTheme && pureBlack) accented.pureBlack() else accented
+    }
     val statusColors = if (darkTheme) DarkStatusColors else LightStatusColors
 
     CompositionLocalProvider(

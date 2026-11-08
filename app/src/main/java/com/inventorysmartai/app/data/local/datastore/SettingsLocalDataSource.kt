@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.inventorysmartai.app.core.common.Constants
@@ -21,6 +22,8 @@ class SettingsLocalDataSource @Inject constructor(
         val NEAR_EXPIRY_WINDOW_DAYS = intPreferencesKey("near_expiry_window_days")
         val DEFAULT_LOW_STOCK_THRESHOLD = doublePreferencesKey("default_low_stock_threshold")
         val DEMO_DATA_LOADED = booleanPreferencesKey("demo_data_loaded")
+        val ACCENT_HUE = floatPreferencesKey("accent_hue")
+        val PURE_BLACK_DARK = booleanPreferencesKey("pure_black_dark")
     }
 
     val themeMode: Flow<String> = dataStore.data.map { it[Keys.THEME_MODE] ?: "SYSTEM" }
@@ -48,5 +51,19 @@ class SettingsLocalDataSource @Inject constructor(
     val isDemoDataLoaded: Flow<Boolean> = dataStore.data.map { it[Keys.DEMO_DATA_LOADED] ?: false }
     suspend fun setDemoDataLoaded(value: Boolean) {
         dataStore.edit { it[Keys.DEMO_DATA_LOADED] = value }
+    }
+
+    /** درجة لون التمييز (0..360)، أو null للون الافتراضي. */
+    val accentHue: Flow<Float?> = dataStore.data.map { it[Keys.ACCENT_HUE] }
+    suspend fun setAccentHue(hue: Float?) {
+        dataStore.edit { prefs ->
+            prefs.remove(Keys.ACCENT_HUE)
+            if (hue != null) prefs[Keys.ACCENT_HUE] = hue
+        }
+    }
+
+    val pureBlackDark: Flow<Boolean> = dataStore.data.map { it[Keys.PURE_BLACK_DARK] ?: false }
+    suspend fun setPureBlackDark(value: Boolean) {
+        dataStore.edit { it[Keys.PURE_BLACK_DARK] = value }
     }
 }

@@ -1,6 +1,7 @@
 package com.inventorysmartai.app.navigation
 
 import androidx.lifecycle.ViewModel
+import com.inventorysmartai.app.data.importing.IncomingFileInbox
 import com.inventorysmartai.app.domain.assistant.AssistantUiBridge
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -11,5 +12,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AppShellViewModel @Inject constructor(
-    val bridge: AssistantUiBridge
+    val bridge: AssistantUiBridge,
+    /** ملفات «فتح بواسطة / مشاركة» القادمة من تطبيقات أخرى — يفتح [AppNavHost] لها شاشة الاستيراد. */
+    val incomingFiles: IncomingFileInbox
 ) : ViewModel()

@@ -3,6 +3,9 @@ package com.inventorysmartai.app.presentation.reports
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,8 +34,25 @@ fun ReportDetailScreen(navController: NavController, reportType: String, viewMod
     val type = runCatching { ReportType.valueOf(reportType) }.getOrDefault(ReportType.INVENTORY)
 
     Scaffold(topBar = { AppTopBar(title = reportTitle(type), onBack = { navController.popBackStack() }) }) { padding ->
-        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
-            StateContent(state = uiState, onRetry = {}) { data -> ReportBody(type, data) }
+        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
+            StateContent(state = uiState, onRetry = {}) { data ->
+                val table = buildReportTable(type, data)
+                LazyColumn(contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // الأنواع التي لها ملخص مرئي (بطاقات أو رسم) تعرضه أولًا؛ الباقي جدول فقط.
+                    if (type != ReportType.COUNTING && type != ReportType.GOALS && type != ReportType.BRANCHES) {
+                        item { ReportBody(type, data) }
+                    }
+                    // تحميل ومشاركة وطباعة الجدول.
+                    item { ReportExportBar(table) }
+                    if (table == null) {
+                        item { Text("لا يوجد جدول لهذا التقرير", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else {
+                        item { Text("${table.title} — ${Formatters.formatInt(table.rows.size)} صف", style = MaterialTheme.typography.titleSmall) }
+                        item { ReportTableHeader(table.headers) }
+                        itemsIndexed(table.displayRows) { i, row -> ReportTableRow(row, i) }
+                    }
+                }
+            }
         }
     }
 }
@@ -47,8 +67,7 @@ private fun ReportBody(type: ReportType, data: ReportsData) {
         ReportType.NEAR_EXPIRY -> SingleStatusCallout(data.inventoryByStatus, InventoryStatus.NEAR_EXPIRY, "أصناف قريبة من الانتهاء")
         ReportType.SALES -> BarChartSection(title = "المبيعات — آخر 30 يوماً", series = data.salesByDay)
         ReportType.PURCHASES -> BarChartSection(title = "طلبات الشراء (بالكمية) — آخر 30 يوماً", series = data.purchasesByDay)
-        ReportType.COUNTING, ReportType.GOALS, ReportType.BRANCHES ->
-            Text("سيتم عرض تفاصيل هذا التقرير هنا — راجع شاشة القسم المخصص لبيانات أكثر تفصيلاً حالياً.", style = MaterialTheme.typography.bodyMedium)
+        ReportType.COUNTING, ReportType.GOALS, ReportType.BRANCHES -> Unit
     }
 }
 

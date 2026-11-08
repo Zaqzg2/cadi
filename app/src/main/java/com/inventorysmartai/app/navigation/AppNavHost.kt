@@ -109,6 +109,16 @@ fun AppNavHost() {
         }
     }
 
+    // ملف وصل من «فتح بواسطة» أو «مشاركة»: نغلق أي استيراد سابق مفتوح ثم نفتح شاشة الاستيراد من جديد، فيسحب الـ ViewModel الجديد
+    // الملف من الصندوق ويحلّله مباشرة. الشاشة تُفتح فوق ما كان مفتوحًا (الرجوع يعيد المستخدم إلى مكانه).
+    val incomingFile by shell.incomingFiles.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(incomingFile) {
+        if (incomingFile != null) {
+            navController.popBackStack(Destination.ImportFlow.route, inclusive = true)
+            navController.navigate(Destination.ImportSetup.route) { launchSingleTop = true }
+        }
+    }
+
     Scaffold(
         bottomBar = { if (showBottomBar) BottomNavBar(currentRoute, navController, canOpen = { access.canOpen(it) }) }
     ) { innerPadding ->

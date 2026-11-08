@@ -160,6 +160,12 @@ interface ReportsRepository {
 interface SettingsRepository {
     fun observeThemeMode(): Flow<ThemeMode>
     suspend fun setThemeMode(mode: ThemeMode)
+    /** درجة لون تمييز التطبيق (0..360)، أو null للأزرق الأصلي. */
+    fun observeAccentHue(): Flow<Float?>
+    suspend fun setAccentHue(hue: Float?)
+    /** خلفية سوداء كاملة في الوضع الداكن. */
+    fun observePureBlackDark(): Flow<Boolean>
+    suspend fun setPureBlackDark(value: Boolean)
     fun observeUseArabicIndicDigits(): Flow<Boolean>
     suspend fun setUseArabicIndicDigits(value: Boolean)
     fun observeNearExpiryWindowDays(): Flow<Int>

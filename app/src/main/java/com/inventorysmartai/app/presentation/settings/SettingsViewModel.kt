@@ -15,6 +15,9 @@ import javax.inject.Inject
 
 data class SettingsUiData(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** درجة لون التمييز (0..360) أو null للأزرق الأصلي. */
+    val accentHue: Float? = null,
+    val pureBlackDark: Boolean = false,
     val useArabicIndicDigits: Boolean = false,
     val isDemoDataLoaded: Boolean = false,
     val demoDataJustLoaded: Boolean = false
@@ -27,16 +30,32 @@ class SettingsViewModel @Inject constructor(
 
     private val demoDataJustLoaded = MutableStateFlow(false)
 
-    val uiState: StateFlow<SettingsUiData> = combine(
+    private val appearance = combine(
         settingsRepository.observeThemeMode(),
+        settingsRepository.observeAccentHue(),
+        settingsRepository.observePureBlackDark()
+    ) { theme, hue, black -> Triple(theme, hue, black) }
+
+    val uiState: StateFlow<SettingsUiData> = combine(
+        appearance,
         settingsRepository.observeUseArabicIndicDigits(),
         settingsRepository.observeIsDemoDataLoaded(),
         demoDataJustLoaded
-    ) { theme, digits, loaded, justLoaded -> SettingsUiData(theme, digits, loaded, justLoaded) }
+    ) { (theme, hue, black), digits, loaded, justLoaded ->
+        SettingsUiData(theme, hue, black, digits, loaded, justLoaded)
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiData())
 
     fun onThemeModeSelected(mode: ThemeMode) {
         viewModelScope.launch { settingsRepository.setThemeMode(mode) }
+    }
+
+    fun onAccentHueSelected(hue: Float?) {
+        viewModelScope.launch { settingsRepository.setAccentHue(hue) }
+    }
+
+    fun onPureBlackDarkChanged(value: Boolean) {
+        viewModelScope.launch { settingsRepository.setPureBlackDark(value) }
     }
 
     fun onUseArabicIndicDigitsChanged(value: Boolean) {

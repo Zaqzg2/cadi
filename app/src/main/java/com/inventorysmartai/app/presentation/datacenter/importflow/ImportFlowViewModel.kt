@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.inventorysmartai.app.data.importing.AiDocumentAnalysisEngine
 import com.inventorysmartai.app.data.importing.FileDetectionResult
+import com.inventorysmartai.app.data.importing.IncomingFileInbox
 import com.inventorysmartai.app.data.importing.ImportEngine
 import com.inventorysmartai.app.data.importing.ImportProgress
 import com.inventorysmartai.app.domain.importing.ColumnMapper
@@ -55,7 +56,8 @@ class ImportFlowViewModel @Inject constructor(
     private val partyRepository: PartyRepository,
     private val productRepository: ProductRepository,
     private val attachmentRepository: AttachmentRepository,
-    private val deviceSessionRepository: DeviceSessionRepository
+    private val deviceSessionRepository: DeviceSessionRepository,
+    private val incomingFileInbox: IncomingFileInbox
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ImportFlowState())
@@ -81,6 +83,8 @@ class ImportFlowViewModel @Inject constructor(
         viewModelScope.launch {
             productRepository.observeProducts().collect { products -> update { it.copy(products = products) } }
         }
+        // ملف جاء من «فتح بواسطة / مشاركة»: يُفحص فورًا كأنه اختير من المنتقي، ويبقى على المستخدم اختيار نوع البيانات.
+        incomingFileInbox.take()?.let { onFilePicked(it) }
     }
 
     private inline fun update(block: (ImportFlowState) -> ImportFlowState) {

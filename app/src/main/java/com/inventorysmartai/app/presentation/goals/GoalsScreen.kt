@@ -2,15 +2,9 @@
 
 package com.inventorysmartai.app.presentation.goals
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.FloatingActionButton
@@ -26,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -34,18 +27,27 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.common.Formatters
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
-import com.inventorysmartai.app.core.designsystem.component.CardAction
+import com.inventorysmartai.app.core.designsystem.component.CellEmphasis
+import com.inventorysmartai.app.core.designsystem.component.DashboardTablePage
 import com.inventorysmartai.app.core.designsystem.component.DestructiveConfirmDialog
-import com.inventorysmartai.app.core.designsystem.component.LongPressCard
+import com.inventorysmartai.app.core.designsystem.component.DistributionCard
+import com.inventorysmartai.app.core.designsystem.component.Kpi
+import com.inventorysmartai.app.core.designsystem.component.KpiGrid
+import com.inventorysmartai.app.core.designsystem.component.RankBarsCard
+import com.inventorysmartai.app.core.designsystem.component.Segment
 import com.inventorysmartai.app.core.designsystem.component.StateContent
-import com.inventorysmartai.app.core.designsystem.component.StatusPill
-import com.inventorysmartai.app.core.designsystem.component.SwipeActionRow
+import com.inventorysmartai.app.core.designsystem.component.TableColumn
+import com.inventorysmartai.app.core.designsystem.component.TableFilter
+import com.inventorysmartai.app.core.designsystem.component.rankItems
 import com.inventorysmartai.app.core.designsystem.component.rememberTopBarSearch
+import com.inventorysmartai.app.core.designsystem.theme.LocalInventoryStatusColors
+import com.inventorysmartai.app.domain.dashboard.goalSummary
+import com.inventorysmartai.app.domain.dashboard.topEntries
 import com.inventorysmartai.app.navigation.Destination
 
 /**
- * قائمة الأهداف — موحَّدة مع قائمة الجرد: ترويسة مدمجة وبحث بالأيقونة، بطاقات (سحب/ضغط مطوّل للحذف)،
- * وزر + لهدف جديد. الضغط على بطاقة يفتح نموذج ذلك الهدف في صفحة مستقلة ([GoalDetailScreen]).
+ * الأهداف والعمولات — لوحة معلومات (مؤشرات وتوزيع وترتيب) وجدول تفاعلي (فرز، فلاتر، نقر لفتح الهدف، زر حذف بتأكيد).
+ * البحث من أيقونة الشريط العلوي يضيّق اللوحة والجدول معًا، وزر + يضيف هدفًا جديدًا.
  */
 @Composable
 fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltViewModel()) {
@@ -81,37 +83,57 @@ fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltVi
                     }
                 }
             ) { list ->
-                LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(list, key = { it.goal.id }) { item ->
-                        // swipe: delete, tap: open — same behaviour as the counting list
-                        SwipeActionRow(onDelete = { pendingDelete = item }) {
-                            LongPressCard(
-                                onClick = { openGoal(item) },
-                                actions = listOf(
-                                    CardAction("فتح") { openGoal(item) },
-                                    CardAction("حذف") { pendingDelete = item }
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(item.goal.productName ?: "صنف", style = MaterialTheme.typography.bodyLarge)
-                                        Text(
-                                            "${Formatters.formatDate(item.goal.periodStart)} • المحقق ${Formatters.formatNumber(item.achievement.achievedQuantity)} من ${Formatters.formatNumber(item.achievement.totalTarget)}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    StatusPill(
-                                        text = Formatters.formatPercent(item.achievement.achievementPercent),
-                                        color = if (item.achievement.achievementPercent >= 100.0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-                                    )
-                                }
-                            }
-                        }
+                val summary = remember(list) { goalSummary(list.map { it.achievement }) }
+                DashboardTablePage(
+                    rows = list,
+                    rowKey = { it.goal.id },
+                    columns = goalColumns,
+                    filters = goalFilters,
+                    onRowClick = openGoal,
+                    onDelete = { pendingDelete = it },
+                    emptyText = "لا توجد أهداف مطابقة"
+                ) {
+                    item {
+                        val status = LocalInventoryStatusColors.current
+                        KpiGrid(
+                            listOf(
+                                Kpi("عدد الأهداف", Formatters.formatInt(summary.count), MaterialTheme.colorScheme.primary),
+                                Kpi("الإنجاز الكلي", Formatters.formatPercent(summary.overallPercent), MaterialTheme.colorScheme.secondary),
+                                Kpi("إجمالي الهدف", Formatters.formatNumber(summary.totalTarget), MaterialTheme.colorScheme.primary),
+                                Kpi("المحقق", Formatters.formatNumber(summary.achieved), status.available),
+                                Kpi("المتبقي", Formatters.formatNumber(summary.remaining), MaterialTheme.colorScheme.tertiary),
+                                Kpi("أهداف مكتملة", "${Formatters.formatInt(summary.completed)} / ${Formatters.formatInt(summary.count)}", status.available)
+                            )
+                        )
+                    }
+                    item {
+                        val status = LocalInventoryStatusColors.current
+                        DistributionCard(
+                            "حالة الأهداف",
+                            listOf(
+                                Segment("مكتمل", summary.completed.toDouble(), status.available),
+                                Segment("قيد التنفيذ", summary.inProgress.toDouble(), status.nearExpiry),
+                                Segment("لم يبدأ", summary.notStarted.toDouble(), status.zero)
+                            )
+                        )
+                    }
+                    item {
+                        val done = LocalInventoryStatusColors.current.available
+                        val primary = MaterialTheme.colorScheme.primary
+                        val byPercent = list.associate { goalLabel(it) to it.achievement.achievementPercent.coerceAtMost(100.0) }
+                        RankBarsCard(
+                            "الأعلى إنجازًا",
+                            rankItems(topEntries(byPercent, 6), { if (it >= 100.0) done else primary }, { Formatters.formatPercent(it) })
+                        )
+                    }
+                    item {
+                        val color = MaterialTheme.colorScheme.tertiary
+                        val remaining = list.associate { goalLabel(it) to it.achievement.remainingQuantity }
+                        RankBarsCard(
+                            "الأكثر متبقيًا للتحقيق",
+                            rankItems(topEntries(remaining, 5), { color }, { Formatters.formatNumber(it) }),
+                            emptyText = "لا يوجد متبقٍ — كل الأهداف محققة"
+                        )
                     }
                 }
             }
@@ -127,3 +149,53 @@ fun GoalsScreen(navController: NavController, viewModel: GoalsViewModel = hiltVi
         )
     }
 }
+
+/** اسم الصنف مع الشهر: قد يكون للصنف الواحد هدف في أكثر من شهر. */
+private fun goalLabel(item: GoalListItem): String =
+    "${item.goal.productName ?: "صنف"} • ${Formatters.formatDate(item.goal.periodStart).take(7)}"
+
+private val goalColumns: List<TableColumn<GoalListItem>> = listOf(
+    TableColumn(
+        "الصنف", 160.dp,
+        text = { it.goal.productName ?: "صنف" },
+        comparator = compareBy<GoalListItem> { it.goal.productName.orEmpty() }
+    ),
+    TableColumn(
+        "الشهر", 90.dp,
+        text = { Formatters.formatDate(it.goal.periodStart).take(7) },
+        comparator = compareBy<GoalListItem> { it.goal.periodStart }
+    ),
+    TableColumn(
+        "الهدف", 90.dp, numeric = true,
+        text = { Formatters.formatNumber(it.achievement.totalTarget) },
+        comparator = compareBy<GoalListItem> { it.achievement.totalTarget }
+    ),
+    TableColumn(
+        "المحقق", 90.dp, numeric = true,
+        text = { Formatters.formatNumber(it.achievement.achievedQuantity) },
+        comparator = compareBy<GoalListItem> { it.achievement.achievedQuantity }
+    ),
+    TableColumn(
+        "المتبقي", 90.dp, numeric = true,
+        text = { Formatters.formatNumber(it.achievement.remainingQuantity) },
+        comparator = compareBy<GoalListItem> { it.achievement.remainingQuantity }
+    ),
+    TableColumn(
+        "الإنجاز", 90.dp, numeric = true,
+        text = { Formatters.formatPercent(it.achievement.achievementPercent) },
+        comparator = compareBy<GoalListItem> { it.achievement.achievementPercent },
+        emphasis = {
+            when {
+                it.achievement.achievementPercent >= 100.0 -> CellEmphasis.NORMAL
+                it.achievement.achievedQuantity <= 0.0 -> CellEmphasis.MUTED
+                else -> CellEmphasis.WARNING
+            }
+        }
+    )
+)
+
+private val goalFilters: List<TableFilter<GoalListItem>> = listOf(
+    TableFilter("مكتمل") { it.achievement.achievementPercent >= 100.0 },
+    TableFilter("قيد التنفيذ") { it.achievement.achievementPercent < 100.0 && it.achievement.achievedQuantity > 0.0 },
+    TableFilter("لم يبدأ") { it.achievement.achievementPercent < 100.0 && it.achievement.achievedQuantity <= 0.0 }
+)

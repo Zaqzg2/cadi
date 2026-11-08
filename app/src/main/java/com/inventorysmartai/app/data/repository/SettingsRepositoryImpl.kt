@@ -20,6 +20,12 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setThemeMode(mode: ThemeMode) = local.setThemeMode(mode.name)
 
+    override fun observeAccentHue(): Flow<Float?> = local.accentHue
+    override suspend fun setAccentHue(hue: Float?) = local.setAccentHue(hue)
+
+    override fun observePureBlackDark(): Flow<Boolean> = local.pureBlackDark
+    override suspend fun setPureBlackDark(value: Boolean) = local.setPureBlackDark(value)
+
     override fun observeUseArabicIndicDigits(): Flow<Boolean> = local.useArabicIndicDigits
     override suspend fun setUseArabicIndicDigits(value: Boolean) = local.setUseArabicIndicDigits(value)
 
