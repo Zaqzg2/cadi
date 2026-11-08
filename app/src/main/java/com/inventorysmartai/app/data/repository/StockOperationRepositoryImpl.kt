@@ -65,10 +65,12 @@ class StockOperationRepositoryImpl @Inject constructor(
         }
         val shortages = StockOperationPlanner.shortages(outgoing, available)
         if (shortages.isNotEmpty()) {
-            val message = shortages.joinToString("\n") { s ->
+            // joinToString's lambda is not inline, so the suspend lookup happens in map (inline) first.
+            val lines = shortages.map { s ->
                 val name = productDao.getById(s.productId)?.name ?: "صنف #${s.productId}"
                 "$name: المتاح ${plain(s.available)} والمطلوب ${plain(s.requested)}"
             }
+            val message = lines.joinToString("\n")
             throw InsufficientStockException(message)
         }
 
