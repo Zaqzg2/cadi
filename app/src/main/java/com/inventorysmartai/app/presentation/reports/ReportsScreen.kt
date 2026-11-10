@@ -41,7 +41,7 @@ import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.theme.LocalInventoryStatusColors
 import com.inventorysmartai.app.domain.model.InventoryStatus
 
-/** لوحة تحكم: مؤشرات + توزيع الحالات + مخططات 30 يومًا، ثم جدول التقرير المختار القابل للطباعة. */
+/** لوحة تحكم: مؤشرات + توزيع الحالات + مخططات 30 يومًا، ثم جدول التقرير المختار (أيقونات تصديره في الترويسة). */
 @Composable
 fun ReportsScreen(navController: NavController, viewModel: ReportsViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -49,7 +49,7 @@ fun ReportsScreen(navController: NavController, viewModel: ReportsViewModel = hi
     val data = (uiState as? UiState.Success)?.data
     val table = data?.let { buildReportTable(selected, it) }
 
-    Scaffold(topBar = { AppTopBar(title = "التقارير") }) { padding ->
+    Scaffold(topBar = { AppTopBar(title = "التقارير", actions = { ReportExportActions(table) }) }) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             StateContent(state = uiState, onRetry = {}) { d ->
                 LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -64,8 +64,7 @@ fun ReportsScreen(navController: NavController, viewModel: ReportsViewModel = hi
                             }
                         }
                     }
-                    // أزرار التحميل والمشاركة والطباعة فوق الجدول مباشرة، وبأسمائها كي لا يبحث عنها المستخدم.
-                    item { ReportExportBar(table) }
+                    // التحميل والمشاركة والطباعة في ترويسة الصفحة، وتخص التقرير المختار في الشرائح أعلاه.
                     if (table == null) {
                         item { Text("لا يوجد جدول لهذا التقرير", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     } else {

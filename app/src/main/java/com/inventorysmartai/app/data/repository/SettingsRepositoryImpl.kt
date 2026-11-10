@@ -2,6 +2,7 @@ package com.inventorysmartai.app.data.repository
 
 import com.inventorysmartai.app.data.demo.DemoDataSeeder
 import com.inventorysmartai.app.data.local.datastore.SettingsLocalDataSource
+import com.inventorysmartai.app.domain.model.ColorOverrides
 import com.inventorysmartai.app.domain.model.ThemeMode
 import com.inventorysmartai.app.domain.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,12 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override fun observePureBlackDark(): Flow<Boolean> = local.pureBlackDark
     override suspend fun setPureBlackDark(value: Boolean) = local.setPureBlackDark(value)
+
+    override fun observeColorOverrides(): Flow<ColorOverrides> = local.colorOverrides
+    override suspend fun setBackgroundColor(argb: Int?) = local.setBackgroundColor(argb)
+    override suspend fun setTextColor(argb: Int?) = local.setTextColor(argb)
+    override suspend fun setCardColor(argb: Int?) = local.setCardColor(argb)
+    override suspend fun resetColorOverrides() = local.resetColorOverrides()
 
     override fun observeUseArabicIndicDigits(): Flow<Boolean> = local.useArabicIndicDigits
     override suspend fun setUseArabicIndicDigits(value: Boolean) = local.setUseArabicIndicDigits(value)

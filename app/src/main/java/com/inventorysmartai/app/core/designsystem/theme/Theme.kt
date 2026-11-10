@@ -11,8 +11,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import com.inventorysmartai.app.domain.model.ColorOverrides
 
 /*
  * Royal blue on a cool white — the look of the design mockups: a confident blue for actions and the selected tab, white cards on a
@@ -182,24 +184,58 @@ private fun ColorScheme.pureBlack(): ColorScheme = copy(
 )
 
 /**
+ * يطبّق ألوان المستخدم (خلفية / خط / بطاقات) فوق المخطط الجاهز. ما لم يحدده المستخدم يُشتق مما حدده بحيث يبقى النص مقروءًا:
+ * بطاقة غير محددة تُشتق من الخلفية، وخط غير محدد يُختار (قاتم أو فاتح) بأعلى تباين مع الخلفية والبطاقة معًا.
+ * الأسطح بين الخلفية والبطاقة (القوائم، الحقول، الشريط السفلي) تتدرّج بينهما فتبقى الصفحة متناسقة.
+ */
+internal fun ColorScheme.withOverrides(o: ColorOverrides): ColorScheme {
+    if (o.isDefault) return this
+    val bg = o.background ?: background.toArgb()
+    val card = o.card ?: if (o.background != null) ColorMath.cardFor(bg) else surfaceContainerHighest.toArgb()
+    val text = o.text ?: ColorMath.bestTextFor(bg, card)
+    val muted = ColorMath.blend(text, bg, 0.3f)
+
+    var s = this
+    if (o.background != null || o.card != null) {
+        s = s.copy(
+            background = Color(bg), surface = Color(bg),
+            surfaceContainerLowest = Color(ColorMath.blend(bg, card, 0.15f)),
+            surfaceContainerLow = Color(ColorMath.blend(bg, card, 0.35f)),
+            surfaceContainer = Color(ColorMath.blend(bg, card, 0.6f)),
+            surfaceContainerHigh = Color(ColorMath.blend(bg, card, 0.8f)),
+            surfaceContainerHighest = Color(card)
+        )
+    }
+    return s.copy(
+        onBackground = Color(text), onSurface = Color(text), onSurfaceVariant = Color(muted),
+        surfaceVariant = Color(ColorMath.blend(bg, text, 0.1f)),
+        outline = Color(ColorMath.blend(bg, text, 0.5f)),
+        outlineVariant = Color(ColorMath.blend(bg, text, 0.18f))
+    )
+}
+
+/**
  * App theme root. The app is Arabic-only, so layout direction is forced to RTL here rather
  * than left to follow the device locale — this is deliberate, not a fallback.
  *
  * [accentHue] درجة لون التمييز (0..360)، أو null للأزرق الأصلي. [pureBlack] يُطبَّق في الوضع الداكن فقط.
+ * [overrides] ألوان خلفية/خط/بطاقات يحددها المستخدم وتغلب على ما سبق.
  */
 @Composable
 fun InventorySmartTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     accentHue: Float? = null,
     pureBlack: Boolean = false,
+    overrides: ColorOverrides = ColorOverrides(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = remember(darkTheme, accentHue, pureBlack) {
+    val colorScheme = remember(darkTheme, accentHue, pureBlack, overrides) {
         val base = if (darkTheme) DarkColors else LightColors
         val accented = if (accentHue == null) base else accentScheme(base, accentHue, darkTheme)
-        if (darkTheme && pureBlack) accented.pureBlack() else accented
+        (if (darkTheme && pureBlack) accented.pureBlack() else accented).withOverrides(overrides)
     }
-    val statusColors = if (darkTheme) DarkStatusColors else LightStatusColors
+    // ألوان الحالات تتبع سطوع الخلفية الفعلي (خلفية داكنة مخصصة داخل الوضع الفاتح تحتاج الدرجات الفاتحة).
+    val statusColors = if (colorScheme.background.luminance() < 0.18f) DarkStatusColors else LightStatusColors
 
     CompositionLocalProvider(
         LocalInventoryStatusColors provides statusColors,

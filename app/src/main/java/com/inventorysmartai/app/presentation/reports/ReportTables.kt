@@ -11,9 +11,9 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,10 +23,9 @@ import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -190,12 +189,12 @@ private fun reportBytes(table: ReportTable, format: ExportFormat): ByteArray = w
 }
 
 /**
- * أزرار تصدير التقرير، ظاهرة بأسمائها (لا أيقونة وحيدة مخفية):
+ * أيقونات تصدير التقرير تُوضع في ترويسة الصفحة (`actions` في [com.inventorysmartai.app.core.designsystem.component.AppTopBar]):
  * «تحميل» يحفظ ملفًا في المكان الذي يختاره المستخدم (التنزيلات مثلًا)، «مشاركة» تفتح قائمة المشاركة (واتساب، بريد، Drive...)،
- * و«طباعة / PDF» تفتح الطباعة التي تتيح أيضًا الحفظ كملف PDF.
+ * و«طباعة» تفتح الطباعة التي تتيح أيضًا الحفظ كملف PDF. تُعطَّل الأيقونات إن لم يكن للتقرير جدول.
  */
 @Composable
-internal fun ReportExportBar(table: ReportTable?, modifier: Modifier = Modifier) {
+internal fun RowScope.ReportExportActions(table: ReportTable?) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var downloadMenu by remember { mutableStateOf(false) }
@@ -211,49 +210,45 @@ internal fun ReportExportBar(table: ReportTable?, modifier: Modifier = Modifier)
     val csvSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(ExportFormat.CSV.mime)) { onPicked(it, ExportFormat.CSV) }
 
     val enabled = table != null
-    Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(modifier = Modifier.weight(1f)) {
-            FilledTonalButton(onClick = { downloadMenu = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.Download, contentDescription = null)
-                Text(" تحميل")
-            }
-            DropdownMenu(expanded = downloadMenu, onDismissRequest = { downloadMenu = false }) {
-                DropdownMenuItem(
-                    text = { Text("Excel (.xlsx)") },
-                    onClick = {
-                        downloadMenu = false
-                        table?.let { pending = it; xlsxSaver.launch(FileNames.safe(it.title, "تقرير", ExportFormat.XLSX.extension)) }
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("CSV") },
-                    onClick = {
-                        downloadMenu = false
-                        table?.let { pending = it; csvSaver.launch(FileNames.safe(it.title, "تقرير", ExportFormat.CSV.extension)) }
-                    }
-                )
-            }
+
+    Box {
+        IconButton(onClick = { downloadMenu = true }, enabled = enabled) {
+            Icon(Icons.Filled.Download, contentDescription = "تحميل التقرير")
         }
-        Box(modifier = Modifier.weight(1f)) {
-            FilledTonalButton(onClick = { shareMenu = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Filled.Share, contentDescription = null)
-                Text(" مشاركة")
-            }
-            DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
-                DropdownMenuItem(
-                    text = { Text("Excel (.xlsx)") },
-                    onClick = { shareMenu = false; table?.let { shareReportTable(context, it, ExportFormat.XLSX) } }
-                )
-                DropdownMenuItem(
-                    text = { Text("CSV — لبرامج أخرى") },
-                    onClick = { shareMenu = false; table?.let { shareReportTable(context, it, ExportFormat.CSV) } }
-                )
-            }
+        DropdownMenu(expanded = downloadMenu, onDismissRequest = { downloadMenu = false }) {
+            DropdownMenuItem(
+                text = { Text("Excel (.xlsx)") },
+                onClick = {
+                    downloadMenu = false
+                    table?.let { pending = it; xlsxSaver.launch(FileNames.safe(it.title, "تقرير", ExportFormat.XLSX.extension)) }
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("CSV") },
+                onClick = {
+                    downloadMenu = false
+                    table?.let { pending = it; csvSaver.launch(FileNames.safe(it.title, "تقرير", ExportFormat.CSV.extension)) }
+                }
+            )
         }
-        OutlinedButton(onClick = { table?.let { printReportTable(context, it) } }, enabled = enabled, modifier = Modifier.weight(1f)) {
-            Icon(Icons.Filled.Print, contentDescription = null)
-            Text(" PDF")
+    }
+    Box {
+        IconButton(onClick = { shareMenu = true }, enabled = enabled) {
+            Icon(Icons.Filled.Share, contentDescription = "مشاركة التقرير")
         }
+        DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
+            DropdownMenuItem(
+                text = { Text("Excel (.xlsx)") },
+                onClick = { shareMenu = false; table?.let { shareReportTable(context, it, ExportFormat.XLSX) } }
+            )
+            DropdownMenuItem(
+                text = { Text("CSV — لبرامج أخرى") },
+                onClick = { shareMenu = false; table?.let { shareReportTable(context, it, ExportFormat.CSV) } }
+            )
+        }
+    }
+    IconButton(onClick = { table?.let { printReportTable(context, it) } }, enabled = enabled) {
+        Icon(Icons.Filled.Print, contentDescription = "طباعة / حفظ PDF")
     }
 }
 

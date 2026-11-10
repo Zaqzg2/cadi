@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.purchases.detail
 
+import com.inventorysmartai.app.core.designsystem.component.NumberTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -237,12 +238,10 @@ private fun ReceiveDialog(rows: List<PurchaseItemRow>, onConfirm: (Map<Long, Dou
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("أدخل الكمية المستلمة الآن لكل صنف", style = MaterialTheme.typography.bodySmall)
                 rows.forEach { row ->
-                    OutlinedTextField(
+                    NumberTextField(
                         value = entered[row.productId].orEmpty(),
                         onValueChange = { entered[row.productId] = it },
-                        label = { Text("${row.productName} (المتبقي ${Formatters.formatNumber(row.remaining)})") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        label = "${row.productName} (المتبقي ${Formatters.formatNumber(row.remaining)})",
                         modifier = Modifier.fillMaxWidth()
                     )
                     DateField(

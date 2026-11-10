@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.datacenter.manual
 
+import com.inventorysmartai.app.core.designsystem.component.NumberTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -169,12 +170,5 @@ fun ManualEntryScreen(navController: NavController, viewModel: ManualEntryViewMo
 
 @Composable
 private fun NumberField(label: String, value: String, onChange: (String) -> Unit, modifier: Modifier) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = modifier
-    )
+    NumberTextField(value = value, onValueChange = onChange, label = label, modifier = modifier)
 }

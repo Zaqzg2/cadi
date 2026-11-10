@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.datacenter.importflow
 
+import com.inventorysmartai.app.core.designsystem.component.NumberTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -390,14 +391,23 @@ private fun RowDetailDialog(
 
                     Text("بيانات الصف", style = MaterialTheme.typography.titleSmall)
                     editableFields.forEach { field ->
-                        OutlinedTextField(
-                            value = inputs.value[field].orEmpty(),
-                            onValueChange = { v -> inputs.value = inputs.value + (field to v) },
-                            label = { Text(field.labelAr) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = if (field.isNumeric) KeyboardType.Decimal else KeyboardType.Text),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        if (field.isNumeric) {
+                            NumberTextField(
+                                value = inputs.value[field].orEmpty(),
+                                onValueChange = { v -> inputs.value = inputs.value + (field to v) },
+                                label = field.labelAr,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            OutlinedTextField(
+                                value = inputs.value[field].orEmpty(),
+                                onValueChange = { v -> inputs.value = inputs.value + (field to v) },
+                                label = { Text(field.labelAr) },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                     OutlinedButton(
                         onClick = { onSaveFields(inputs.value.mapValues { it.value.ifBlank { null } }) },

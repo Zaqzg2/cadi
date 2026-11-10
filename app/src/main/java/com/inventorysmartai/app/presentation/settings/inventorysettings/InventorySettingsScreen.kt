@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.settings.inventorysettings
 
+import com.inventorysmartai.app.core.designsystem.component.NumberTextField
 import com.inventorysmartai.app.core.common.toDecimalOrNull
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,11 +48,10 @@ fun InventorySettingsScreen(navController: NavController, viewModel: InventorySe
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
+                    NumberTextField(
                         value = windowText,
                         onValueChange = { windowText = it; it.toDecimalOrNull()?.toInt()?.let(viewModel::onNearExpiryWindowChanged) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        keyboardType = KeyboardType.Number
                     )
                 }
             }
@@ -63,11 +63,9 @@ fun InventorySettingsScreen(navController: NavController, viewModel: InventorySe
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
+                    NumberTextField(
                         value = thresholdText,
-                        onValueChange = { thresholdText = it; it.toDecimalOrNull()?.let(viewModel::onDefaultLowStockThresholdChanged) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true
+                        onValueChange = { thresholdText = it; it.toDecimalOrNull()?.let(viewModel::onDefaultLowStockThresholdChanged) }
                     )
                 }
             }

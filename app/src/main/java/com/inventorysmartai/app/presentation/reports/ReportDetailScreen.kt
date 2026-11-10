@@ -16,6 +16,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.dp
@@ -23,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.inventorysmartai.app.core.common.Formatters
+import com.inventorysmartai.app.core.common.UiState
 import com.inventorysmartai.app.core.designsystem.component.AppTopBar
 import com.inventorysmartai.app.core.designsystem.component.StateContent
 import com.inventorysmartai.app.core.designsystem.component.StatusChip
@@ -33,17 +35,21 @@ fun ReportDetailScreen(navController: NavController, reportType: String, viewMod
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val type = runCatching { ReportType.valueOf(reportType) }.getOrDefault(ReportType.INVENTORY)
 
-    Scaffold(topBar = { AppTopBar(title = reportTitle(type), onBack = { navController.popBackStack() }) }) { padding ->
+    // الجدول يُبنى هنا (لا داخل المحتوى) كي تعمل أيقونات التحميل والمشاركة والطباعة في الترويسة.
+    val table = remember(uiState, type) { (uiState as? UiState.Success)?.data?.let { buildReportTable(type, it) } }
+
+    Scaffold(
+        topBar = {
+            AppTopBar(title = reportTitle(type), onBack = { navController.popBackStack() }, actions = { ReportExportActions(table) })
+        }
+    ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
             StateContent(state = uiState, onRetry = {}) { data ->
-                val table = buildReportTable(type, data)
                 LazyColumn(contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     // الأنواع التي لها ملخص مرئي (بطاقات أو رسم) تعرضه أولًا؛ الباقي جدول فقط.
                     if (type != ReportType.COUNTING && type != ReportType.GOALS && type != ReportType.BRANCHES) {
                         item { ReportBody(type, data) }
                     }
-                    // تحميل ومشاركة وطباعة الجدول.
-                    item { ReportExportBar(table) }
                     if (table == null) {
                         item { Text("لا يوجد جدول لهذا التقرير", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     } else {

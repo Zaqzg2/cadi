@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.parties
 
+import com.inventorysmartai.app.core.designsystem.component.NumberTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -185,9 +186,8 @@ private fun PartyDialog(kind: PartyKind, isNew: Boolean, initial: PartyForm, onC
                 )
                 OutlinedTextField(form.address, { form = form.copy(address = it) }, label = { Text("العنوان") }, modifier = Modifier.fillMaxWidth())
                 if (kind == PartyKind.CUSTOMER) {
-                    OutlinedTextField(
-                        form.extra, { form = form.copy(extra = it) }, label = { Text("الرصيد الافتتاحي") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.fillMaxWidth()
+                    NumberTextField(
+                        form.extra, { form = form.copy(extra = it) }, label = "الرصيد الافتتاحي", modifier = Modifier.fillMaxWidth()
                     )
                 } else {
                     OutlinedTextField(form.extra, { form = form.copy(extra = it) }, label = { Text("ملاحظات") }, modifier = Modifier.fillMaxWidth())

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.inventorysmartai.app.core.common.Constants
+import com.inventorysmartai.app.domain.model.ColorOverrides
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -24,6 +25,9 @@ class SettingsLocalDataSource @Inject constructor(
         val DEMO_DATA_LOADED = booleanPreferencesKey("demo_data_loaded")
         val ACCENT_HUE = floatPreferencesKey("accent_hue")
         val PURE_BLACK_DARK = booleanPreferencesKey("pure_black_dark")
+        val CUSTOM_BACKGROUND = intPreferencesKey("custom_background_color")
+        val CUSTOM_TEXT = intPreferencesKey("custom_text_color")
+        val CUSTOM_CARD = intPreferencesKey("custom_card_color")
     }
 
     val themeMode: Flow<String> = dataStore.data.map { it[Keys.THEME_MODE] ?: "SYSTEM" }
@@ -65,5 +69,29 @@ class SettingsLocalDataSource @Inject constructor(
     val pureBlackDark: Flow<Boolean> = dataStore.data.map { it[Keys.PURE_BLACK_DARK] ?: false }
     suspend fun setPureBlackDark(value: Boolean) {
         dataStore.edit { it[Keys.PURE_BLACK_DARK] = value }
+    }
+
+    /** ألوان الخلفية والخط والبطاقات التي خصصها المستخدم (null لما لم يغيّره). */
+    val colorOverrides: Flow<ColorOverrides> = dataStore.data.map {
+        ColorOverrides(background = it[Keys.CUSTOM_BACKGROUND], text = it[Keys.CUSTOM_TEXT], card = it[Keys.CUSTOM_CARD])
+    }
+
+    suspend fun setBackgroundColor(argb: Int?) = setOptionalInt(Keys.CUSTOM_BACKGROUND, argb)
+    suspend fun setTextColor(argb: Int?) = setOptionalInt(Keys.CUSTOM_TEXT, argb)
+    suspend fun setCardColor(argb: Int?) = setOptionalInt(Keys.CUSTOM_CARD, argb)
+
+    suspend fun resetColorOverrides() {
+        dataStore.edit {
+            it.remove(Keys.CUSTOM_BACKGROUND)
+            it.remove(Keys.CUSTOM_TEXT)
+            it.remove(Keys.CUSTOM_CARD)
+        }
+    }
+
+    private suspend fun setOptionalInt(key: Preferences.Key<Int>, value: Int?) {
+        dataStore.edit { prefs ->
+            prefs.remove(key)
+            if (value != null) prefs[key] = value
+        }
     }
 }

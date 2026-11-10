@@ -2,6 +2,7 @@
 
 package com.inventorysmartai.app.presentation.stockops
 
+import com.inventorysmartai.app.core.designsystem.component.NumberTextField
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -151,12 +152,10 @@ fun StockOperationFormScreen(navController: NavController, viewModel: StockOpera
                             clearable = false
                         )
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
+                            NumberTextField(
                                 value = row.quantity,
                                 onValueChange = { viewModel.onQuantity(row.localId, it) },
-                                label = { Text("الكمية") },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                label = "الكمية",
                                 modifier = Modifier.weight(1f)
                             )
                             if (state.lines.size > 1) {

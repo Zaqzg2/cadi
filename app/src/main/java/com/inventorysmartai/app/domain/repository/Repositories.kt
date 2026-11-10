@@ -166,6 +166,12 @@ interface SettingsRepository {
     /** خلفية سوداء كاملة في الوضع الداكن. */
     fun observePureBlackDark(): Flow<Boolean>
     suspend fun setPureBlackDark(value: Boolean)
+    /** ألوان الخلفية والخط والبطاقات التي خصصها المستخدم. */
+    fun observeColorOverrides(): Flow<ColorOverrides>
+    suspend fun setBackgroundColor(argb: Int?)
+    suspend fun setTextColor(argb: Int?)
+    suspend fun setCardColor(argb: Int?)
+    suspend fun resetColorOverrides()
     fun observeUseArabicIndicDigits(): Flow<Boolean>
     suspend fun setUseArabicIndicDigits(value: Boolean)
     fun observeNearExpiryWindowDays(): Flow<Int>

@@ -48,8 +48,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -303,7 +305,10 @@ private fun HeaderCell(title: String, width: Dp, sortArrow: Boolean?, clickable:
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun EditableCell(initial: String, width: Dp, numeric: Boolean, hasNext: Boolean, onCommit: (text: String, advance: Boolean) -> Unit) {
-    var text by remember { mutableStateOf(initial) }
+    // الخلية الرقمية تبدأ والقيمة القديمة كلها محددة: أول رقم يكتبه المستخدم يستبدلها (كجدول البيانات)، ولمسة أخرى تضع المؤشر.
+    var field by remember {
+        mutableStateOf(TextFieldValue(initial, if (numeric) TextRange(0, initial.length) else TextRange(initial.length)))
+    }
     var hadFocus by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -317,12 +322,12 @@ private fun EditableCell(initial: String, width: Dp, numeric: Boolean, hasNext: 
     fun finish(advance: Boolean) {
         if (finished) return
         finished = true
-        onCommit(text.trim(), advance)
+        onCommit(field.text.trim(), advance)
     }
 
     BasicTextField(
-        value = text,
-        onValueChange = { text = it },
+        value = field,
+        onValueChange = { field = it },
         singleLine = true,
         textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),

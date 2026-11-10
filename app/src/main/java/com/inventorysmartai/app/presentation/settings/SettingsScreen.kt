@@ -130,7 +130,7 @@ private fun NavRow(label: String, onClick: () -> Unit) {
     }
 }
 
-/** المظهر: الوضع (فاتح/داكن/تلقائي)، لون التطبيق (جاهز أو مخصص)، أسود حقيقي، وشكل الأرقام. التغيير ينعكس فورًا على كل الصفحات. */
+/** المظهر: الوضع (فاتح/داكن/تلقائي)، لون التطبيق (جاهز أو مخصص)، أسود حقيقي، ألوان الخلفية والخط والبطاقات، وشكل الأرقام. التغيير ينعكس فورًا على كل الصفحات. */
 @Composable
 private fun AppearanceCard(ui: SettingsUiData, viewModel: SettingsViewModel) {
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -163,6 +163,14 @@ private fun AppearanceCard(ui: SettingsUiData, viewModel: SettingsViewModel) {
                 }
                 Switch(checked = ui.pureBlackDark, onCheckedChange = viewModel::onPureBlackDarkChanged)
             }
+
+            ColorCustomizationSection(
+                colors = ui.colors,
+                onBackground = viewModel::onBackgroundColorChosen,
+                onText = viewModel::onTextColorChosen,
+                onCard = viewModel::onCardColorChosen,
+                onReset = viewModel::onResetColors
+            )
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("استخدام الأرقام العربية الهندية (٠١٢٣)", modifier = Modifier.weight(1f))

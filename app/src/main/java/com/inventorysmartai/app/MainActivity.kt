@@ -20,11 +20,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewModelScope
+import com.inventorysmartai.app.core.designsystem.theme.ColorMath
 import com.inventorysmartai.app.core.designsystem.theme.InventorySmartTheme
 import com.inventorysmartai.app.data.access.AccessManager
 import com.inventorysmartai.app.data.google.GoogleAuthManager
 import com.inventorysmartai.app.data.importing.IncomingFileInbox
 import com.inventorysmartai.app.data.importing.IncomingFiles
+import com.inventorysmartai.app.domain.model.ColorOverrides
 import com.inventorysmartai.app.domain.model.ThemeMode
 import com.inventorysmartai.app.domain.repository.SettingsRepository
 import com.inventorysmartai.app.navigation.AppNavHost
@@ -82,14 +84,21 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
             }
             // أيقونات شريط الحالة والتنقل تتبع وضع التطبيق (لا وضع النظام): بدونه تظهر أيقونات داكنة فوق خلفية داكنة عند اختيار الداكن داخل التطبيق.
-            DisposableEffect(darkTheme) {
+            // وإن خصّص المستخدم خلفية فاتحة داخل الوضع الداكن (أو العكس) فالأيقونات تتبع الخلفية الفعلية.
+            val barsOnDark = appearance.colors.background?.let { ColorMath.isDark(it) } ?: darkTheme
+            DisposableEffect(barsOnDark) {
                 enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT) { darkTheme },
-                    navigationBarStyle = SystemBarStyle.auto(LIGHT_NAV_SCRIM, DARK_NAV_SCRIM) { darkTheme }
+                    statusBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT) { barsOnDark },
+                    navigationBarStyle = SystemBarStyle.auto(LIGHT_NAV_SCRIM, DARK_NAV_SCRIM) { barsOnDark }
                 )
                 onDispose {}
             }
-            InventorySmartTheme(darkTheme = darkTheme, accentHue = appearance.accentHue, pureBlack = appearance.pureBlackDark) {
+            InventorySmartTheme(
+                darkTheme = darkTheme,
+                accentHue = appearance.accentHue,
+                pureBlack = appearance.pureBlackDark,
+                overrides = appearance.colors
+            ) {
                 // القفل طبقة فوق التطبيق لا بديلًا عنه: يبقى كل ما كان مفتوحًا (ونماذج لم تُحفظ بعد) كما هو خلفها.
                 Box(modifier = Modifier.fillMaxSize()) {
                     AppNavHost()
@@ -136,7 +145,8 @@ class MainActivity : ComponentActivity() {
 data class AppAppearance(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val accentHue: Float? = null,
-    val pureBlackDark: Boolean = false
+    val pureBlackDark: Boolean = false,
+    val colors: ColorOverrides = ColorOverrides()
 )
 
 @HiltViewModel
@@ -146,7 +156,8 @@ class MainActivityViewModel @Inject constructor(
     val appearance: StateFlow<AppAppearance> = combine(
         settingsRepository.observeThemeMode(),
         settingsRepository.observeAccentHue(),
-        settingsRepository.observePureBlackDark()
-    ) { mode, hue, black -> AppAppearance(mode, hue, black) }
+        settingsRepository.observePureBlackDark(),
+        settingsRepository.observeColorOverrides()
+    ) { mode, hue, black, colors -> AppAppearance(mode, hue, black, colors) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppAppearance())
 }

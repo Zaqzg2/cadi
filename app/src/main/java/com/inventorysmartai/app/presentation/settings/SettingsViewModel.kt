@@ -2,6 +2,7 @@ package com.inventorysmartai.app.presentation.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.inventorysmartai.app.domain.model.ColorOverrides
 import com.inventorysmartai.app.domain.model.ThemeMode
 import com.inventorysmartai.app.domain.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +19,8 @@ data class SettingsUiData(
     /** درجة لون التمييز (0..360) أو null للأزرق الأصلي. */
     val accentHue: Float? = null,
     val pureBlackDark: Boolean = false,
+    /** ألوان الخلفية والخط والبطاقات المخصصة. */
+    val colors: ColorOverrides = ColorOverrides(),
     val useArabicIndicDigits: Boolean = false,
     val isDemoDataLoaded: Boolean = false,
     val demoDataJustLoaded: Boolean = false
@@ -33,16 +36,17 @@ class SettingsViewModel @Inject constructor(
     private val appearance = combine(
         settingsRepository.observeThemeMode(),
         settingsRepository.observeAccentHue(),
-        settingsRepository.observePureBlackDark()
-    ) { theme, hue, black -> Triple(theme, hue, black) }
+        settingsRepository.observePureBlackDark(),
+        settingsRepository.observeColorOverrides()
+    ) { theme, hue, black, colors -> SettingsUiData(themeMode = theme, accentHue = hue, pureBlackDark = black, colors = colors) }
 
     val uiState: StateFlow<SettingsUiData> = combine(
         appearance,
         settingsRepository.observeUseArabicIndicDigits(),
         settingsRepository.observeIsDemoDataLoaded(),
         demoDataJustLoaded
-    ) { (theme, hue, black), digits, loaded, justLoaded ->
-        SettingsUiData(theme, hue, black, digits, loaded, justLoaded)
+    ) { look, digits, loaded, justLoaded ->
+        look.copy(useArabicIndicDigits = digits, isDemoDataLoaded = loaded, demoDataJustLoaded = justLoaded)
     }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiData())
 
@@ -56,6 +60,22 @@ class SettingsViewModel @Inject constructor(
 
     fun onPureBlackDarkChanged(value: Boolean) {
         viewModelScope.launch { settingsRepository.setPureBlackDark(value) }
+    }
+
+    fun onBackgroundColorChosen(argb: Int?) {
+        viewModelScope.launch { settingsRepository.setBackgroundColor(argb) }
+    }
+
+    fun onTextColorChosen(argb: Int?) {
+        viewModelScope.launch { settingsRepository.setTextColor(argb) }
+    }
+
+    fun onCardColorChosen(argb: Int?) {
+        viewModelScope.launch { settingsRepository.setCardColor(argb) }
+    }
+
+    fun onResetColors() {
+        viewModelScope.launch { settingsRepository.resetColorOverrides() }
     }
 
     fun onUseArabicIndicDigitsChanged(value: Boolean) {

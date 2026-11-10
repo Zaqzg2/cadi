@@ -1,5 +1,6 @@
 package com.inventorysmartai.app.presentation.goals
 
+import com.inventorysmartai.app.core.designsystem.component.NumberTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,21 +38,17 @@ fun GoalGroupCard(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
+                NumberTextField(
                     value = row.targetQuantity,
                     onValueChange = onTargetChange,
-                    label = { Text("الهدف") },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+                    label = "الهدف",
+                    modifier = Modifier.weight(1f)
                 )
-                OutlinedTextField(
+                NumberTextField(
                     value = row.commissionValue,
                     onValueChange = onCommissionValueChange,
-                    label = { Text("العمولة") },
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+                    label = "العمولة",
+                    modifier = Modifier.weight(1f)
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
